@@ -198,6 +198,9 @@ pre.code code{background:none;padding:0}
 .opt:has(input:checked){border-color:var(--accent);background:var(--accent-soft)}
 .opt input{accent-color:var(--accent);width:17px;height:17px;margin:0;flex:0 0 auto}
 .opt .badge{margin-left:auto}
+.opt.other{padding:4px 10px;cursor:text}
+.opt.other input.other-txt{flex:1;width:auto;height:auto;min-width:0;margin:0;font:inherit;font-size:.95rem;color:var(--text);background:transparent;border:0;border-radius:0;border-bottom:1px dashed var(--line-2);padding:4px 2px;outline:none}
+.opt.other input.other-txt:focus{border-bottom-color:var(--accent)}
 .todo .opt:has(input:checked) span{text-decoration:line-through;color:var(--muted)}
 textarea,input[type=text],input[type=number],input[type=date]{font:inherit;width:100%;padding:9px 11px;border:1px solid var(--line-2);border-radius:8px;background:var(--bg);color:var(--text)}
 input[type=number],input[type=date]{max-width:240px}
@@ -261,3 +264,20 @@ dialog::backdrop{background:rgba(0,0,0,.35)}
 .ol .dt{color:var(--text-2);font-size:.82rem;font-weight:400;line-height:1.4}
 .opt .ol,.ap .lbl,.rank .lbl{flex:1}
 .q-number .hint{margin-left:8px}
+
+/* !draw sketches */
+.draw{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px}
+.draw svg{display:block;max-width:100%;height:auto;margin:0 auto;overflow:visible;font-family:var(--font)}
+.draw figcaption{margin-top:8px;text-align:center;color:var(--text-2);font-size:.88rem}
+.draw .fg{--c:var(--text-2)}.draw .gr{--c:var(--muted)}
+.draw .s1{--c:var(--s1)}.draw .s2{--c:var(--s2)}.draw .s3{--c:var(--s3)}.draw .s4{--c:var(--s4)}
+.draw .s5{--c:var(--s5)}.draw .s7{--c:var(--s7)}.draw .s8{--c:var(--s8)}
+.draw .sh{stroke:var(--c);fill:var(--c);fill-opacity:.13;stroke-linejoin:round;stroke-linecap:round}
+.draw .sh.empty{fill:none}.draw .sh.solid{fill-opacity:.75}
+.draw path.sh[fill=none]{fill:none}
+.draw .hd{fill:var(--c);stroke:none}
+.draw .dt{fill:var(--c);stroke:none}
+.draw .gl{stroke:var(--line)}
+.draw .gt{fill:var(--muted);font-size:.8em;stroke:none}
+.draw .lb{fill:var(--text);stroke:var(--surface);paint-order:stroke;stroke-linejoin:round}
+.draw .tx.s1,.draw .tx.s2,.draw .tx.s3,.draw .tx.s4,.draw .tx.s5,.draw .tx.s7,.draw .tx.s8,.draw .tx.gr{fill:var(--c)}

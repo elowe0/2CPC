@@ -16,14 +16,20 @@ Alternative: stdin heredoc `python "{{CPC}}" new <<'EOF' … EOF` — fragile wi
 Then tell the user, in one short line, to answer and click "Générer la réponse" (same session) or
 "Réponse + Contexte" (new session), then paste it here.
 
+## Visuals
+- Spatial content (layout, zones, distances, paths, trajectories, wireframes) → add a `!draw` sketch (few lines,
+  see DSL) instead of describing coordinates in prose. Flow/sequence logic → `!mermaid`.
+- `!img` only for files that exist in the project or URLs the user gave you; never guess web image URLs.
+
 ## Answers pasted back
 `2CPC <id> vN` + `key=value` lines (or a `[2CPC]` header with project/plan paths). Use them directly — do not
-re-read the plan unless needed (`python "{{CPC}}" path <id>`). For a revision, write the full revised DSL to a file:
+re-read the plan unless needed (`python "{{CPC}}" path <id>`). A quoted value on a choice/multi/pick (`id="…"`)
+is a custom answer typed by the user. For a revision, write the full revised DSL to a file:
 `python "{{CPC}}" new <file> --id <id>` → vN+1 (answers to unchanged ids/item keys carry over; keep them stable).
 
 ## Other
 `open [id]` reopen · `list` · `path <id>` · `--no-open`
 
 ## Token rules
-Concise DSL, no filler prose; prefer questions over long explanations; use item keys (`KEY=Label`) for long
+Concise DSL, no filler prose; prefer questions over long explanations; no "Other?" text question for a choice (an "Other…" field is built in); use item keys (`KEY=Label`) for long
 lists so answers stay short; never cat the HTML.

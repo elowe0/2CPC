@@ -5,7 +5,7 @@ import shutil
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 
-from . import charts
+from . import charts, draw
 from .i18n import STRINGS
 from .markdown import esc, inline
 from .parser import first_paragraph, slug
@@ -109,6 +109,9 @@ def q_opts(b, kind):
         rec = '<span class="badge rec" data-i18n="recommended"></span>' if o in b.get("rec", []) else ""
         out.append(f'<label class="opt"><input type="{kind}" name="{esc(name)}" value="{esc(o)}">'
                    f'{opt_label(b, o)}{rec}</label>')
+    if b.get("other"):
+        out.append(f'<label class="opt other"><input type="{kind}" name="{esc(name)}" value="__other" '
+                   f'data-i18n-title="other"><input type="text" class="other-txt" data-i18n-ph="otherPh"></label>')
     return f'<div class="opts">{"".join(out)}</div>'
 
 
@@ -219,6 +222,8 @@ def block(b, ctx, top=False):
         return f'<figure class="video"><video controls preload="metadata" src="{esc(url)}"></video>{caption(b["caption"])}</figure>'
     if t == "chart":
         return charts.render(b)
+    if t == "draw":
+        return f'<figure class="draw">{draw.render(b)}{caption(b["caption"])}</figure>'
     if t == "kpi":
         tiles = "".join(f'<div class="tile"><div class="kv">{inline(v)}</div><div class="kk">{inline(k)}</div></div>'
                         for k, v in b["items"])
@@ -318,7 +323,7 @@ def body_html(plan, ctx, comments=True):
 
 
 def q_meta(b):
-    keep = ("id", "qt", "label", "req", "opts", "labels", "keyed", "rows", "cols", "items", "min", "max", "def")
+    keep = ("id", "qt", "label", "req", "opts", "labels", "keyed", "rows", "cols", "items", "min", "max", "def", "other")
     return {k: b[k] for k in keep if k in b}
 
 

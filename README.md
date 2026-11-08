@@ -23,6 +23,8 @@ python cpc.py rebuild [ID]           # régénérer les pages après une mise à
 
 ## Format
 Voir [docs/DSL.md](docs/DSL.md) : Markdown, plus des directives `!bloc` et des questions `?type id | libellé | options`.
+- `!draw … !end` : croquis vectoriel en quelques lignes (`box`, `circle`, `arrow`, `dot`…), rendu en SVG dans la page, sans image externe.
+- Les questions `?choice` / `?multi` / `?pick` ont toujours un champ « Autre… » ; la réponse libre revient entre guillemets (`id="…"`). En-tête `other: off` pour le retirer.
 
 ## Page
 - **Générer la réponse** : texte compact (`2CPC id vN` puis une ligne `id=valeur` par réponse), pour la session Claude en cours.

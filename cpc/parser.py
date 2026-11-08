@@ -5,11 +5,13 @@ hold child block lists. Questions have t="q" and a "qt" (question type).
 """
 import re
 
-HEADER_KEYS = ("title", "lang", "intro", "comments")
+from . import draw
+
+HEADER_KEYS = ("title", "lang", "intro", "comments", "other")
 CALLOUTS = ("note", "tip", "warn", "danger")
 QTYPES = ("choice", "multi", "text", "line", "number", "date", "scale",
           "yesno", "rank", "approve", "matrix", "pick")
-RAW = ("code", "mermaid", "cards")
+RAW = ("code", "mermaid", "cards", "draw")
 CONTAINERS = ("cols", "tabs", "details")
 
 _ID = re.compile(r"^[A-Za-z0-9_.-]+$")
@@ -80,6 +82,7 @@ def parse(text):
         plan.meta[m.group(1)] = m.group(2).strip()
         i += 1
 
+    other_on = plan.meta.get("other", "on").lower() not in ("off", "no", "0", "false")
     root = []
     stack = []  # entries: dict(block=..., target=list)
     target = root
@@ -231,6 +234,10 @@ def parse(text):
                     target.append({"t": "code", "lang": arg, "text": "\n".join(body)})
                 elif name == "mermaid":
                     target.append({"t": "mermaid", "text": "\n".join(body)})
+                elif name == "draw":
+                    d = draw.parse(body, warn)
+                    d.update({"t": "draw", "caption": arg})
+                    target.append(d)
                 else:
                     cards = []
                     for b in body:
@@ -385,6 +392,8 @@ def parse(text):
                 else:
                     b["opts"] = [c["title"] for c in cb["cards"]]
                     cb["pick"] = qid
+            if qt in ("choice", "multi", "pick"):
+                b["other"] = other_on
             add_q(b)
             i += 1
             continue

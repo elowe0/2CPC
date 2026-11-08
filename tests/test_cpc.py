@@ -13,7 +13,8 @@ sys.path.insert(0, str(ROOT))
 import cpc as _pkg  # noqa: E402,F401
 from cpc.parser import parse  # noqa: E402
 from cpc.markdown import inline  # noqa: E402
-from cpc import charts  # noqa: E402
+from cpc import charts, draw  # noqa: E402
+from cpc.render import Ctx, block  # noqa: E402
 
 import importlib.util  # noqa: E402
 spec = importlib.util.spec_from_file_location("cpc_cli", ROOT / "cpc.py")
@@ -127,6 +128,55 @@ class FeedbackTest(unittest.TestCase):
         w = " ".join(p.warnings)
         for frag in ("extra '|'", "'*' ignored", "empty item", "unknown question type", "out of range"):
             self.assertIn(frag, w)
+
+
+class DrawTest(unittest.TestCase):
+    SRC = ("!draw Plot\ngrid\ncircle 0,0 5.6 .empty .dash\nbox -3,-2 6,3.5 .blue Forge\n"
+           "dot 0,4.6 .red PathEndSpot ; text 0,-4 back\narrow 3,-3 4,-1 3,1 .curve .both zone\n"
+           "poly -4,-1 -3,-3 -3,1 .green\nline 0,0 1,1\n!end")
+
+    def test_parse(self):
+        p = parse(self.SRC)
+        self.assertEqual(p.warnings, [])
+        d = p.blocks[0]
+        self.assertEqual((d["t"], d["caption"], d["grid"]), ("draw", "Plot", 1.0))
+        cmds = [s["cmd"] for s in d["shapes"]]
+        self.assertEqual(cmds, ["circle", "box", "dot", "text", "arrow", "poly", "line"])
+        c = d["shapes"][0]
+        self.assertEqual((c["r"], c["flags"], c["label"]), (5.6, ["dash", "empty"], ""))
+        self.assertEqual(d["shapes"][1]["color"], "s1")
+        self.assertEqual(d["shapes"][1]["label"], "Forge")
+        self.assertEqual(d["shapes"][4]["flags"], ["both", "curve"])
+
+    def test_render(self):
+        d = parse(self.SRC).blocks[0]
+        html = block(d, Ctx(".", ".", set()))
+        self.assertIn('<figure class="draw"><svg viewBox=', html)
+        for frag in ("<circle", "<rect", "<polygon", "<path", "PathEndSpot", "<figcaption>Plot"):
+            self.assertIn(frag, html)
+        self.assertEqual(html.count('class="hd"'), 2)    # .both -> 2 arrowheads
+
+    def test_warnings(self):
+        p = parse("!draw\nstar 1,1\nbox 1,1\ncircle 0,0\ntext 1,1\n!end\n!draw\n!end")
+        w = " ".join(p.warnings)
+        for frag in ("unknown shape 'star'", "box: needs 2", "radius", "empty label", "no shapes"):
+            self.assertIn(frag, w)
+
+
+class OtherOptionTest(unittest.TestCase):
+    def test_default_on(self):
+        p = parse("?choice c | Q | A ; B\n?multi m | Q | A ; B\n?rank r | Q | A ; B")
+        q = {x["id"]: x for x in p.questions}
+        self.assertTrue(q["c"]["other"] and q["m"]["other"])
+        self.assertNotIn("other", q["r"])
+        html = block(q["c"], Ctx(".", ".", set()))
+        self.assertIn('value="__other"', html)
+        self.assertIn('class="other-txt"', html)
+
+    def test_header_off(self):
+        p = parse("other: off\n?choice c | Q | A ; B")
+        self.assertFalse(p.questions[0]["other"])
+        self.assertNotIn("__other", block(p.questions[0], Ctx(".", ".", set())))
 
 
 class CliTest(unittest.TestCase):

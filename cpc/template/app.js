@@ -13,7 +13,8 @@
   var S = load(P.key);
   var fresh = !S;
   S = S || {};
-  S.a = S.a || {}; S.c = S.c || {}; S.r = S.r || {};
+  S.a = S.a || {}; S.c = S.c || {}; S.r = S.r || {}; S.o = S.o || {};
+  var OTHER = "__other";
 
   function save() {
     S.ts = new Date().toISOString();
@@ -83,10 +84,10 @@
     v = remapAll(q, v);
     var opts = q.opts || [];
     switch (q.qt) {
-      case "choice": case "pick": return opts.indexOf(v) >= 0 ? v : undefined;
+      case "choice": case "pick": return opts.indexOf(v) >= 0 || (v === OTHER && q.other) ? v : undefined;
       case "yesno": return v === "yes" || v === "no" ? v : undefined;
       case "scale": var n = +v; return n >= q.min && n <= q.max ? String(n) : undefined;
-      case "multi": var m = (v || []).filter(function (x) { return opts.indexOf(x) >= 0; }); return m.length ? m : undefined;
+      case "multi": var m = (v || []).filter(function (x) { return opts.indexOf(x) >= 0 || (x === OTHER && q.other); }); return m.length ? m : undefined;
       case "todo": var td = (v || []).filter(function (x) { return (q.items || []).indexOf(x) >= 0; }); return td.length ? td : undefined;
       case "rank":
         if (!Array.isArray(v)) return undefined;
@@ -111,7 +112,10 @@
     if (prev && prev.a) {
       P.questions.forEach(function (q) {
         var pq = prev.a[q.id], v = compat(q, pq);
-        if (v !== undefined) { S.a[q.id] = v; S.r[q.id] = 1; }
+        if (v !== undefined) {
+          S.a[q.id] = v; S.r[q.id] = 1;
+          if (q.other && prev.o && prev.o[q.id]) S.o[q.id] = prev.o[q.id];
+        }
       });
       if (Object.keys(S.r).length) save();
     }
@@ -152,12 +156,13 @@
     return v;
   }
   function writeQ(el) {
-    var q = Q[el.dataset.q], v = S.a[q.id];
+    var q = Q[el.dataset.q], v = S.a[q.id], ot = $(".other-txt", el);
+    if (ot) ot.value = S.o[q.id] || "";
     switch (q.qt) {
       case "choice": case "pick": case "yesno": case "scale":
-        $$("input", el).forEach(function (i) { i.checked = v !== undefined && i.value === String(v); }); break;
+        $$("input:not(.other-txt)", el).forEach(function (i) { i.checked = v !== undefined && i.value === String(v); }); break;
       case "multi":
-        $$("input", el).forEach(function (i) { i.checked = (v || []).indexOf(i.value) >= 0; }); break;
+        $$("input:not(.other-txt)", el).forEach(function (i) { i.checked = (v || []).indexOf(i.value) >= 0; }); break;
       case "todo":
         $$("input", el).forEach(function (i) { i.checked = (v || []).indexOf(q.items[+i.value]) >= 0; }); break;
       case "text": $("textarea", el).value = v || ""; break;
@@ -184,8 +189,17 @@
         break;
     }
   }
-  function answered(q) {
+  function otherTxt(q) { return String(S.o[q.id] || "").trim(); }
+  // value without an empty "other" entry
+  function eff(q) {
     var v = S.a[q.id];
+    if (!q.other) return v;
+    if (v === OTHER) return otherTxt(q) ? v : undefined;
+    if (Array.isArray(v) && !otherTxt(q)) return v.filter(function (x) { return x !== OTHER; });
+    return v;
+  }
+  function answered(q) {
+    var v = eff(q);
     if (v === undefined || v === null || v === "") return false;
     if (Array.isArray(v)) return v.length > 0;
     if (typeof v === "object") return Object.keys(v).length > 0;
@@ -222,7 +236,16 @@
   function onChange(e) {
     var qe = e.target.closest(".q");
     if (qe) {
-      var id = qe.dataset.q, v = readQ(qe);
+      var id = qe.dataset.q;
+      if (e.target.classList.contains("other-txt")) {
+        S.o[id] = e.target.value;
+        var box = e.target.parentNode.querySelector("input:not(.other-txt)");
+        if (box && e.target.value.trim()) box.checked = true;
+      }
+      else if (e.type === "change" && e.target.value === OTHER && e.target.checked) {
+        var tx = e.target.parentNode.querySelector(".other-txt"); if (tx && !tx.value) tx.focus();
+      }
+      var v = readQ(qe);
       S.a[id] = v; delete S.r[id];
       save(); refresh(); return;
     }
@@ -299,7 +322,7 @@
     return ctx && lbl(q, k) !== k ? k + "(" + short(lbl(q, k), 25) + ")" : k;
   }
   function joinSafe(list, sep, alt) {
-    return list.join(list.some(function (x) { return x.indexOf(sep) >= 0; }) ? alt : sep);
+    return list.join(list.some(function (x) { return x.charAt(0) !== '"' && x.indexOf(sep) >= 0; }) ? alt : sep);
   }
   // -> array of "key=value" lines for one question
   function lines(q, v, ctx) {
@@ -313,8 +336,9 @@
         });
       case "yesno": val = t(v); break;
       case "scale": val = v + "/" + q.max; break;
-      case "choice": case "pick": val = optOut(q, v, ctx); break;
-      case "multi": val = joinSafe(v.map(function (k) { return optOut(q, k, ctx); }), ",", " ; "); break;
+      case "choice": case "pick": val = v === OTHER ? JSON.stringify(otherTxt(q)) : optOut(q, v, ctx); break;
+      case "multi":
+        val = joinSafe(v.map(function (k) { return k === OTHER ? JSON.stringify(otherTxt(q)) : optOut(q, k, ctx); }), ",", " ; "); break;
       case "rank": val = joinSafe(v.map(function (k) { return optOut(q, k, ctx); }), ">", " ; "); break;
       case "text": case "line": val = JSON.stringify(v.trim()); break;
       case "todo": val = v.length + "/" + q.items.length + (v.length ? " " + v.map(function (x) { return "✓" + clean(x); }).join(" ") : ""); break;
@@ -337,7 +361,7 @@
       L.push("2CPC " + P.id + " v" + P.v);
     }
     P.questions.forEach(function (q) {
-      if (answered(q)) L.push.apply(L, lines(q, S.a[q.id], ctx));
+      if (answered(q)) L.push.apply(L, lines(q, eff(q), ctx));
     });
     P.sections.forEach(function (s) {
       var c = (S.c[s.id] || "").trim();
@@ -398,7 +422,7 @@
       try {
         var o = JSON.parse(rd.result), st = o.state || o;
         if (!st || typeof st.a !== "object") throw 0;
-        S = { a: st.a || {}, c: st.c || {}, r: {} };
+        S = { a: st.a || {}, c: st.c || {}, o: st.o || {}, r: {} };
         save(); location.reload();
       } catch (x) { alert(t("importFail")); }
     };

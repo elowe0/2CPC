@@ -1,0 +1,15 @@
+{
+ "plans": {
+  "demo-2cpc-toutes-les-features": {
+   "title": "Démo 2CPC — toutes les features",
+   "v": 1,
+   "versions": {
+    "1": {
+     "title": "Démo 2CPC — toutes les features",
+     "date": "2026-11-08"
+    }
+   },
+   "updated": "2026-11-08T16:27:32"
+  }
+ }
+}

@@ -1,0 +1,118 @@
+title: Démo 2CPC — toutes les features
+lang: fr
+intro: Plan de test fictif (lancement d'une appli « Potager ») qui illustre chaque bloc de contenu et chaque type de question du DSL 2CPC.
+
+# 1. Texte & mise en forme
+Paragraphe avec **gras**, *italique*, `code inline` et un [lien](https://example.com).
+
+## Listes
+- Puce simple
+- Puce avec **markdown**
+
+1. Étape numérotée
+2. Deuxième étape
+
+### Citations & encadrés
+> Citation classique.
+> note: Encadré *note*.
+> tip: Encadré *astuce*.
+> warn: Encadré *attention*.
+> danger: Encadré *danger*.
+
+---
+
+# 2. Données
+!kpi Budget=45 k€ ; Délai=6 sem ; Équipe=4 pers.
+!progress Avancement maquettes | 40
+!progress Backend | 75
+
+!chart bar | Inscriptions bêta par semaine | S1=12, S2=19, S3=31, S4=44
+!chart line | Rétention (%) | J1=62, J7=38, J14=29, J30=21
+!chart donut | Plateformes | iOS=48, Android=41, Web=11
+
+!table | Option | Coût | Délai | Note
+| Firebase | 8 k€ | 2 sem | **rapide**
+| Supabase | 6 k€ | 3 sem | open-source
+| Backend maison | 20 k€ | 8 sem | contrôle total \| lent
+
+# 3. Planning
+!steps Cadrage ; Maquettes ; Dev MVP ; Bêta ; Lancement
+!gantt Cadrage=S1 ; Maquettes=S1-S2 ; Dev MVP=S2-S5 ; Bêta=S5-S6 ; Lancement=S6
+!todo setup | Créer le repo ; Configurer la CI ; Rédiger la charte UI
+!link Documentation DSL | docs/DSL.md
+
+# 4. Visuels
+!mermaid
+flowchart LR
+  A[Ouverture appli] --> B{Connecté ?}
+  B -- oui --> C[Tableau du potager]
+  B -- non --> D[Onboarding] --> C
+!end
+
+!draw Wireframe écran d'accueil (mobile)
+box 0,0 10,18 .empty .gray Écran
+box 0.5,0.5 9,2 .blue En-tête
+box 0.5,3 4.2,5 .green Météo
+box 5.3,3 4.2,5 .yellow Arrosage
+box 0.5,8.5 9,7 .empty .dash Liste des plantes
+circle 8.5,16.5 0.8 .orange +
+arrow 6,16.5 7.6,16.5 .red bouton FAB
+!end
+
+!draw Plan du jardin (grille 1 m)
+grid
+box 0,0 4,2 .green Tomates
+box 5,0 3,2 .yellow Courgettes
+poly 0,3 3,3 1.5,5 .purple Aromatiques
+circle 7,4 1 .blue Récupérateur
+line 4,1 4,5 .dash allée
+arrow 7,3 6.5,1.5 2,1 .curve .blue .thick arrosage
+!end
+
+!code python
+def arroser(plante, litres=1.5):
+    return f"{plante} : {litres} L"
+!end
+
+# 5. Mise en page
+!cols
+### Colonne gauche
+Contenu de la première colonne.
+!col
+### Colonne droite
+> tip: Les colonnes acceptent tout le markdown.
+!end
+
+!tabs MVP
+Périmètre minimal : suivi des plantes + rappels.
+!tab V2
+Partage communautaire, marketplace de graines.
+!tab V3
+Capteurs IoT d'humidité.
+!end
+
+!details Détails techniques (repliable)
+Stack envisagée : **React Native** + Supabase. Notifications via FCM.
+!end
+
+# 6. Questions — choix
+!cards
+Firebase | Mise en route rapide | + SDK mobile mature ; - verrouillage Google
+Supabase | Postgres open-source | + SQL standard ; + auto-hébergeable ; - écosystème plus jeune
+Maison | API Node sur mesure | + contrôle total ; - coût et délai
+!end
+?pick backend! | Quel backend retenez-vous ?
+
+?choice platform! | Plateforme prioritaire | rn=React Native* :: un seul code ; flutter=Flutter :: perf UI ; native=Natif :: iOS + Android séparés
+?multi features | Features du MVP | plants=Suivi des plantes ; remind=Rappels d'arrosage ; meteo=Météo locale ; photo=Journal photo ; share=Partage
+?rank priorities | Classez les priorités | ux=Expérience utilisateur ; perf=Performance ; cost=Coût ; time=Délai
+?approve scope | Validez le périmètre | APP-01=Onboarding (P1) ; APP-02=Notifications push (P1) :: nécessite FCM ; APP-03=Mode hors-ligne (P2) ; APP-04=Thème sombre (P3)
+?matrix raci | Qui fait quoi ? | Design ; Backend ; Tests | Alice ; Bob ; Externe
+
+# 7. Questions — valeurs
+?text vision | Décrivez la vision produit en quelques phrases
+?line name | Nom de code du projet | Potager
+?date launch | Date de lancement visée | 2027-03-01
+?number budget | Budget max (k€) | 10-100 | 45
+?scale confidence | Confiance dans le planning | 1-5 | 3
+?yesno go! | Lancer le projet ? | oui

@@ -2,7 +2,7 @@
 Markdown + one-line directives. `!` = content, `?` = question. `|` separates fields, `;` separates items.
 Literal `|` or `;` inside a field: write `\|` / `\;`. Inline markdown (**b** *i* `code` [l](url)) works in all labels, items, details, cells.
 
-Header (top, optional): `title:` · `lang: fr|en` · `intro:` 1–2 sentences (used by "Answer + Context") · `comments: off`
+Header (top, optional): `title:` · `lang: fr|en` · `intro:` 1–2 sentences (used by "Answer + Context") · `comments: off` · `other: off`
 
 Text: `#`/`##`/`###` headings · paragraphs · `- `/`1. ` lists · `> quote` · `> note|tip|warn|danger: text` · `---`
 
@@ -22,11 +22,35 @@ Content:
 !code lang … !end    !mermaid … !end
 !cards … !end        lines: Title | desc | + pro ; - con
 !cols … !col … !end  !tabs Name … !tab Name … !end  !details Title … !end
+!draw caption … !end  sketch, see below
+```
+
+### `!draw` — quick sketch (rendered as SVG, no image needed)
+Use it whenever the plan talks about **positions, layouts, zones, paths, trajectories, UI wireframes**: a 5-line
+sketch beats a paragraph of coordinates. One shape per line (or `;`-separated), `x,y` with **y down**, any unit
+(auto-fitted, only relative positions matter):
+```
+box x,y w,h [label]     circle x,y r [label]     dot x,y [label]      text x,y label
+line x,y x,y … [label]  arrow x,y x,y … [label]  poly x,y x,y x,y … [label]   grid [step]
+```
+Flags before the label: `.blue .orange .green .yellow .pink .purple .red .gray` · `.dash` · `.thick` ·
+`.empty` (no fill) · `.solid` · `.curve` (smooth through the points) · `.both` (2 arrowheads). `//` = comment.
+`grid` adds a light grid with coordinates (handy to discuss "the prop at 3,2").
+```
+!draw Parcelle, vue de dessus (porte en bas)
+grid
+circle 0,0 5.6 .empty .dash
+box -3,-2 6,3.5 .blue Forge
+box -0.6,1.5 1.2,4 .red .dash Couloir
+dot 0,4.6 .red PathEndSpot
+arrow 3.5,-3 4.6,-1.4 3.6,0.8 .curve .orange zone props
+!end
 ```
 
 Questions — `?type id | label | …` ; `id!` = required ; keep ids stable across versions (answers carry over by id):
 ```
 ?choice id | Q | A* ; B ; C        (single; * = recommended — choice/multi only)
+                                   choice/multi/pick always get an extra "Other…" free-text option (`other: off` to disable)
 ?multi id | Q | A ; B ; C
 ?rank id | Q | A ; B ; C
 ?approve id | Q | Item1 ; Item2    (✓/✗/? + note per item)
@@ -42,7 +66,7 @@ answer key; `:: detail` (optional) is a secondary line. Use keys whenever labels
 Each `#`/`##` section gets a comment box (answer key `#Section`).
 
 Answer pasted back: `2CPC <id> vN` then one `key=value` line per answer (unanswered omitted):
-`choice`→key · `multi`→`k1,k2` · `rank`→`k1>k2` · `scale`→`4/5` · `matrix`→`Row:Col, …` · text→JSON string ·
+`choice`→key · `multi`→`k1,k2` · a **quoted** value is the user's own "Other" answer (`psp="Mollie"`, `f=a,"PDF export"`) · `rank`→`k1>k2` · `scale`→`4/5` · `matrix`→`Row:Col, …` · text→JSON string ·
 `approve`→ one line per item: `id.KEY=✓` / `id.KEY=✗ "note"` / `id.KEY=?` / `id.KEY="note"`.
 "Answer + Context" adds a header (title, intro, absolute paths) and short labels: `id(Label)=…`, `k(Label)`.
 
