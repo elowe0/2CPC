@@ -1,0 +1,19 @@
+2CPC 2cpc-ameliorations-utiles v3
+p1ok.bar=✓
+p1ok.dec=✓
+p1ok.badge=✓
+p2.C1=✓
+p2.C3=✓
+p2.C4=✓
+p2.E1=✓
+p3.D1=✓
+p3.D2=✓
+p3.D3=✓
+p3.D4=✓
+p3.F3=✓
+p3.F4=✓
+p4.E2=✓
+p4.E3=✓
+p4.E5=✓
+p4.B3=✓
+next=p2>all

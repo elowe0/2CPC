@@ -1,4 +1,5 @@
 """Block tree -> standalone HTML page."""
+import hashlib
 import json
 import re
 import shutil
@@ -16,6 +17,16 @@ CUR = ' aria-current="page"'
 MERMAID = "https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"
 
 
+EDITORS = {  # !link to a local file -> editor URL ({path} absolute posix, {line}, {col})
+    "vscode": "vscode://file/{path}:{line}:{col}",
+    "cursor": "cursor://file/{path}:{line}:{col}",
+    "windsurf": "windsurf://file/{path}:{line}:{col}",
+    "idea": "idea://open?file={path}&line={line}",
+    "rider": "rider://open?file={path}&line={line}",
+    "none": "",
+}
+
+
 def is_url(s):
     return bool(re.match(r"^(https?:)?//", s, re.I)) or s.startswith("data:")
 
@@ -30,9 +41,17 @@ class Ctx:
         self.toc = []
         self.sections = []
         self.mermaid = False
+        self.lang = "fr"
+        self.decisions = {}   # version -> rows [label, value] (or None: no saved answers)
+        self.default_dec_v = None
+        self.sec_status = {}  # section id -> "chg" | "new" (only for v > 1)
+        self.editor = "vscode"
 
     def asset(self, src):
-        """Copy a local asset into vN/assets/, return its relative URL (or None)."""
+        """Copy a local asset once per plan into <plan>/assets/<sha8>-<name>, return its URL from vN/ (or None).
+
+        Same content -> same file for every version. If the source is gone, the legacy per-version copy
+        (vN/assets/<name>, before shared assets) is reused."""
         if is_url(src):
             return src
         p = Path(src)
@@ -42,17 +61,18 @@ class Ctx:
         if p in self.copied:
             return self.copied[p]
         if not p.is_file():
-            self.warnings.append(f"missing asset: {src}")
-            return None
-        dest_dir = self.vdir / "assets"
-        dest_dir.mkdir(parents=True, exist_ok=True)
-        name, k = p.name, 1
-        used = {Path(u).name for u in self.copied.values()}
-        while name in used:
-            k += 1
-            name = f"{p.stem}-{k}{p.suffix}"
-        shutil.copy2(p, dest_dir / name)
-        url = f"assets/{name}"
+            legacy = self.vdir / "assets" / p.name
+            if not legacy.is_file():
+                self.warnings.append(f"missing asset: {src}")
+                return None
+            p = legacy
+        data = p.read_bytes()
+        name = f"{hashlib.sha1(data).hexdigest()[:8]}-{slug(p.stem, 40)}{p.suffix.lower()}"
+        dest = self.vdir.parent / "assets" / name
+        if not dest.is_file():
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(p, dest)
+        url = f"../assets/{name}"
         self.copied[p] = url
         return url
 
@@ -169,8 +189,12 @@ def question(b, ctx):
             trs.append(f'<tr data-row="{esc(r)}"><th scope="row">{inline(r)}</th>{tds}</tr>')
         body = f'<div class="tbl"><table class="matrix"><thead><tr><th></th>{head}</tr></thead><tbody>{"".join(trs)}</tbody></table></div>'
     elif qt == "todo":
-        items = "".join(f'<label class="opt"><input type="checkbox" value="{k}"><span>{inline(o)}</span></label>'
-                        for k, o in enumerate(b["items"]))
+        done = set(b.get("agent") or ())
+        items = "".join(
+            f'<label class="opt{" agent" if o in done else ""}"><input type="checkbox" value="{k}"'
+            f'{" checked disabled" if o in done else ""}><span>{inline(o)}</span>'
+            + ('<span class="badge agent" data-i18n="agentDone"></span>' if o in done else "") + '</label>'
+            for k, o in enumerate(b["items"]))
         body = f'<div class="opts todo">{items}</div>'
     else:
         body = ""
@@ -184,9 +208,28 @@ def block(b, ctx, top=False):
     t = b["t"]
     if t == "h":
         lvl = b["level"]
+        badge, attr = "", ""
         if top:
             ctx.toc.append((lvl, b["text"], b["id"]))
-        return f'<h{lvl + 1} id="{esc(b["id"])}">{inline(b["text"])}</h{lvl + 1}>'
+            if lvl <= 2 and ctx.sec_status:
+                st = ctx.sec_status.get(b["id"], "same")
+                attr = f' data-sec="{st}"'
+                if st != "same":
+                    badge = f' <span class="badge {st}" data-i18n="{"isNew" if st == "new" else "changed"}"></span>'
+        return f'<h{lvl + 1} id="{esc(b["id"])}"{attr}>{inline(b["text"])}{badge}</h{lvl + 1}>'
+    if t == "decisions":
+        v = b["v"] or ctx.default_dec_v
+        S = STRINGS.get(ctx.lang) or STRINGS["fr"]
+        rows = ctx.decisions.get(v) if v else None
+        cap = caption(b["title"]) if b["title"] else ""
+        if not rows:
+            ctx.warnings.append(f"!decisions: no saved answers for v{v} (cpc.py answers <id> --save)" if v
+                                else "!decisions: no previous version")
+            msg = S["decNone"].replace("{v}", str(v or "?"))
+            return f'<div class="callout warn"><span class="ic">⚠</span><div>{inline(msg)}</div></div>'
+        body = "".join(f"<tr><td>{inline(q)}</td><td>{inline(a)}</td></tr>" for q, a in rows)
+        return (f'<figure class="decisions"><div class="tbl"><table><thead><tr><th>{esc(S["decQ"])}</th>'
+                f'<th>{esc(S["decA"].replace("{v}", str(v)))}</th></tr></thead><tbody>{body}</tbody></table></div>{cap}</figure>')
     if t == "p":
         return f"<p>{inline(b['text'])}</p>"
     if t in ("ul", "ol"):
@@ -286,14 +329,39 @@ def block(b, ctx, top=False):
     if t == "details":
         return f'<details class="det"><summary>{inline(b["title"])}</summary><div>{blocks(b["blocks"], ctx)}</div></details>'
     if t == "link":
-        href = b["href"]
+        href, alt = b["href"], ""
         if not is_url(href) and not href.startswith(("mailto:", "#")):
-            p = Path(href)
+            m = re.match(r"^(.*?)(?::(\d+))?(?::(\d+))?$", href)
+            p = Path(m.group(1))
             p = (p if p.is_absolute() else ctx.root / p).resolve()
             if not p.exists():
                 ctx.warnings.append(f"missing link target: {href}")
             href = p.as_uri()
+            tpl = EDITORS.get(ctx.editor, ctx.editor if "{path}" in (ctx.editor or "") else "")
+            if tpl and p.is_file():  # source file -> open in the editor (at the line), file:// as a fallback
+                alt = (f' <a class="alt" href="{esc(href)}" target="_blank" rel="noopener" '
+                       f'data-i18n-title="fileOpen">📄</a>')
+                href = tpl.format(path=p.as_posix(), line=m.group(2) or 1, col=m.group(3) or 1)
+                return (f'<p class="link"><a href="{esc(href)}" data-i18n-title="editorOpen">✎ {inline(b["label"])}</a>'
+                        f'<code class="lk">{esc(b["href"])}</code>{alt}</p>')
         return f'<p class="link"><a href="{esc(href)}" target="_blank" rel="noopener">🔗 {inline(b["label"])}</a></p>'
+    if t == "compare":
+        a, c = ctx.asset(b["a"]), ctx.asset(b["b"])
+        if not a or not c:
+            return missing(b["a"] if not a else b["b"])
+        return (f'<figure class="cmp"><div class="cmp-box" style="--pos:50%">'
+                f'<img src="{esc(a)}" alt="" loading="lazy"><img class="after" src="{esc(c)}" alt="" loading="lazy">'
+                f'<span class="cmp-l" data-i18n="cmpBefore"></span><span class="cmp-r" data-i18n="cmpAfter"></span>'
+                f'<input type="range" min="0" max="100" value="50" aria-label="before / after"></div>'
+                f'{caption(b["caption"])}</figure>')
+    if t == "html":
+        url = ctx.asset(b["src"])
+        if not url:
+            return missing(b["src"])
+        return (f'<figure class="htmlfr"><iframe src="{esc(url)}" sandbox="allow-scripts" loading="lazy" '
+                f'style="height:{b["height"]}px" title="{esc(b["caption"] or b["src"])}"></iframe>'
+                f'<figcaption>{inline(b["caption"])} <a href="{esc(url)}" target="_blank" rel="noopener">↗</a>'
+                f'</figcaption></figure>')
     if t == "q":
         return question(b, ctx)
     return ""
@@ -356,17 +424,34 @@ def next_panel(b):
 
 
 def q_meta(b):
-    keep = ("id", "qt", "label", "req", "opts", "labels", "keyed", "rows", "cols", "items", "min", "max", "def", "other")
+    keep = ("id", "qt", "label", "req", "opts", "labels", "keyed", "rows", "cols", "items", "keys", "agent",
+            "min", "max", "def", "other")
     return {k: b[k] for k in keep if k in b}
 
 
 def render_page(plan, info, root, vdir, new_ids):
     """info: id, v, title, intro, date, project, plan_path, tool, key, prev_key, versions."""
     ctx = Ctx(root, vdir, new_ids)
-    comments = plan.meta.get("comments", "on").lower() not in ("off", "no", "0", "false")
-    body = body_html(plan, ctx, comments)
     lang = plan.meta.get("lang", "").lower()
     lang = lang if lang in STRINGS else ""
+    ctx.lang = lang or "fr"
+    ctx.editor = info.get("editor") or "vscode"
+    ctx.decisions = info.get("decisions") or {}
+    ctx.default_dec_v = info["v"] - 1 if info["v"] > 1 else None
+    chg = info.get("changes")  # (changed ids, new ids, removed titles) vs the previous version
+    if chg:
+        ctx.sec_status = {k: "chg" for k in chg[0]}
+        ctx.sec_status.update({k: "new" for k in chg[1]})
+        ctx.sec_status["__any"] = "same"  # non-empty -> headings get data-sec
+    comments = plan.meta.get("comments", "on").lower() not in ("off", "no", "0", "false")
+    body = body_html(plan, ctx, comments)
+    changes = ""
+    if chg and (chg[0] or chg[1] or chg[2]):
+        changes = (f'<div id="chgBar" class="callout tip" data-c="{len(chg[0])}" data-n="{len(chg[1])}" '
+                   f'data-pv="{info["v"] - 1}"><span class="ic">Δ</span><div><span class="chg-txt"></span>'
+                   + (f' <span class="chg-del"><span data-i18n="chgDel"></span> '
+                      f'{" · ".join(inline(x) for x in chg[2])}</span>' if chg[2] else "")
+                   + ' <button type="button" class="btn sm" id="chgOnly" data-i18n="chgOnly"></button></div></div>')
     nxt = next_opts(plan, lang)
     toc = "".join(f'<li class="l{lvl}"><a href="#{esc(hid)}">{inline(txt)}</a></li>' for lvl, txt, hid in ctx.toc)
     meta = {
@@ -378,22 +463,30 @@ def render_page(plan, info, root, vdir, new_ids):
         "questions": [q_meta(q) for q in plan.questions],
         "sections": [{"id": s["id"], "text": s["text"]} for s in ctx.sections] if comments else [],
         "next": {k: nxt[k] for k in ("opts", "labels", "keyed", "rec") if k in nxt} if nxt else None,
+        "prevQ": {k: q_meta(q) for k, q in (info.get("prev_q") or {}).items()},
     }
     js_json = lambda o: json.dumps(o, ensure_ascii=False).replace("</", "<\\/")
+    gone = set(info.get("gone") or ())
     versions = "".join(
+        f'<span class="gone" data-i18n-title="gcGone">v{v}</span>' if v in gone and v != info["v"] else
         f'<a href="../v{v}/index.html"{CUR if v == info["v"] else ""}>v{v}</a>'
         for v in info["versions"])
+    status = info.get("status")
+    st_txt = (STRINGS.get(lang) or STRINGS["fr"]).get(f"st_{status}", status) if status else ""
     page = (TPL / "page.html").read_text(encoding="utf-8")
     repl = {
         "{{LANG}}": lang or "fr",
         "{{TITLE}}": esc(info["title"]),
         "{{CSS}}": (TPL / "style.css").read_text(encoding="utf-8"),
+        "{{ANSWERS_JS}}": (TPL / "answers.js").read_text(encoding="utf-8"),
         "{{JS}}": (TPL / "app.js").read_text(encoding="utf-8"),
+        "{{CHANGES}}": changes,
         "{{BODY}}": body,
         "{{TOC}}": toc + ('<li class="l1"><a href="#next" data-i18n="nextTitle"></a></li>' if nxt else ""),
         "{{NEXT}}": next_panel(nxt),
         "{{VERSIONS}}": versions,
-        "{{META_LINE}}": esc(f"v{info['v']} · {Path(info['project']).name} · {info['date']}"),
+        "{{META_LINE}}": esc(f"v{info['v']} · {Path(info['project']).name} · {info['date']}")
+                         + (f' · <span class="st st-{esc(status)}">{esc(st_txt)}</span>' if status else ""),
         "{{PLAN}}": js_json(meta),
         "{{I18N}}": js_json(STRINGS),
         "{{MERMAID}}": (f'<script src="{MERMAID}" defer onerror="window.__mmFail=1"></script>' if ctx.mermaid else ""),

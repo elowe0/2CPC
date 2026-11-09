@@ -14,7 +14,7 @@
   var fresh = !S;
   S = S || {};
   S.a = S.a || {}; S.c = S.c || {}; S.r = S.r || {}; S.o = S.o || {};
-  var OTHER = "__other";
+  var A = window.CPCAnswers, OTHER = A.OTHER;  // answers.js (pure answer-text functions)
 
   function save() {
     S.ts = new Date().toISOString();
@@ -55,6 +55,7 @@
     if (S.ts) save(); else $("#saveState").textContent = "";
     $$(".next-list li.custom").forEach(nxTitles);
     $$("figure.mermaid-wrap figcaption").forEach(function (e) { e.textContent = t("mermaidOffline"); });
+    if (typeof chgLabels === "function" && chgBar !== undefined) chgLabels();
     refresh();
   }
   function prevV() { return P.v - 1; }
@@ -128,6 +129,13 @@
       if (q.def !== undefined && S.a[q.id] === undefined) { S.a[q.id] = q.def; anyDef = true; }
     });
   }
+
+  // todo items done by the agent (`cpc.py todo`) always count as checked
+  P.questions.forEach(function (q) {
+    if (q.qt !== "todo" || !(q.agent || []).length) return;
+    var cur = Array.isArray(S.a[q.id]) ? S.a[q.id] : [];
+    S.a[q.id] = q.items.filter(function (x) { return cur.indexOf(x) >= 0 || q.agent.indexOf(x) >= 0; });
+  });
 
   // ---------- "What next?" panel ----------
   // S.n = { items: [{k: key} | {c: custom text}, each with on: bool], pause: bool, note: str }
@@ -261,22 +269,9 @@
         break;
     }
   }
-  function otherTxt(q) { return String(S.o[q.id] || "").trim(); }
-  // value without an empty "other" entry
-  function eff(q) {
-    var v = S.a[q.id];
-    if (!q.other) return v;
-    if (v === OTHER) return otherTxt(q) ? v : undefined;
-    if (Array.isArray(v) && !otherTxt(q)) return v.filter(function (x) { return x !== OTHER; });
-    return v;
-  }
-  function answered(q) {
-    var v = eff(q);
-    if (v === undefined || v === null || v === "") return false;
-    if (Array.isArray(v)) return v.length > 0;
-    if (typeof v === "object") return Object.keys(v).length > 0;
-    return String(v).trim() !== "";
-  }
+  function otherTxt(q) { return A.otherTxt(q, S); }
+  function eff(q) { return A.eff(q, S); }
+  function answered(q) { return A.answered(q, S); }
   function rankNums(el) { $$(".rank li", el).forEach(function (li, k) { $(".rk", li).textContent = k + 1 + "."; }); }
 
   function refresh() {
@@ -294,6 +289,7 @@
     $("#progTxt").textContent = total ? t("progress", { a: done, t: total }) : "";
     $("#reqTxt").textContent = miss ? "· " + t("reqMissing", { n: miss }) : "";
     $("#reusedBanner").hidden = !Object.keys(S.r).length;
+    if (typeof tocBadges === "function") tocBadges();
     $$(".cards[data-pick]").forEach(function (cs) {
       var v = S.a[cs.dataset.pick];
       $$(".card", cs).forEach(function (c) {
@@ -397,77 +393,8 @@
   });
 
   // ---------- answer generation ----------
-  function clean(s) { return String(s).replace(/[*`_\[\]]/g, "").replace(/\s+/g, " ").trim(); }
-  function short(s, n) { s = clean(s).replace(/\s*[?:]+$/, ""); return s.length > n ? s.slice(0, n - 1).trim() + "…" : s; }
-  function lbl(q, k) { return (q.labels && q.labels[k]) || k; }
-  function optOut(q, k, ctx) {
-    if (!q.keyed) return clean(k);
-    return ctx && lbl(q, k) !== k ? k + "(" + short(lbl(q, k), 25) + ")" : k;
-  }
-  function joinSafe(list, sep, alt) {
-    return list.join(list.some(function (x) { return x.charAt(0) !== '"' && x.indexOf(sep) >= 0; }) ? alt : sep);
-  }
-  // -> array of "key=value" lines for one question
-  function lines(q, v, ctx) {
-    var base = q.id + (ctx && q.label ? "(" + short(q.label, 30) + ")" : ""), val;
-    switch (q.qt) {
-      case "approve":
-        return (q.opts || []).filter(function (o) { return v[o]; }).map(function (o) {
-          var it = v[o], sym = { y: "✓", n: "✗", "?": "?" }[it.s] || "";
-          var key = q.id + "." + (q.keyed ? o : short(o, 40)) + (ctx && q.keyed && lbl(q, o) !== o ? "(" + short(lbl(q, o), 25) + ")" : "");
-          return key + "=" + [sym, it.n ? JSON.stringify(it.n) : ""].filter(Boolean).join(" ");
-        });
-      case "yesno": val = t(v); break;
-      case "scale": val = v + "/" + q.max; break;
-      case "choice": case "pick": val = v === OTHER ? JSON.stringify(otherTxt(q)) : optOut(q, v, ctx); break;
-      case "multi":
-        val = joinSafe(v.map(function (k) { return k === OTHER ? JSON.stringify(otherTxt(q)) : optOut(q, k, ctx); }), ",", " ; "); break;
-      case "rank": val = joinSafe(v.map(function (k) { return optOut(q, k, ctx); }), ">", " ; "); break;
-      case "text": case "line": val = JSON.stringify(v.trim()); break;
-      case "todo": val = v.length + "/" + q.items.length + (v.length ? " " + v.map(function (x) { return "✓" + clean(x); }).join(" ") : ""); break;
-      case "matrix":
-        val = (q.rows || []).filter(function (r) { return v[r]; }).map(function (r) { return clean(r) + ":" + v[r]; }).join(", "); break;
-      default: val = String(v);
-    }
-    return [base + "=" + val];
-  }
-  // next=k1>k2>"custom" (ticked steps, in order) · next.pause=oui · next.note="…"
-  function nextLines(ctx) {
-    var out = [], on = S.n.items.filter(function (it) { return it.on; });
-    if (on.length) {
-      out.push("next=" + on.map(function (it) {
-        if (it.c) return JSON.stringify(it.c);
-        var L = (NX.labels && NX.labels[it.k]) || it.k;
-        return ctx && L !== it.k ? it.k + "(" + short(L, 30) + ")" : it.k;
-      }).join(">"));
-      if (S.n.pause) out.push("next.pause=" + t("yes"));
-    }
-    var note = String(S.n.note || "").trim();
-    if (note) out.push("next.note=" + JSON.stringify(note));
-    return out;
-  }
-  function build(ctx) {
-    var L = [];
-    if (ctx) {
-      L.push(t("ctxHead", { t: P.title, v: P.v, d: P.date }));
-      if (P.intro) L.push(t("ctxIntro") + " : " + clean(P.intro));
-      L.push(t("ctxProject") + " : " + P.project);
-      L.push(t("ctxPlan") + " : " + P.planPath);
-      L.push(t("ctxTool") + " : " + t("ctxToolLine", { tool: P.tool, n: P.v + 1, id: P.id }));
-      L.push("---");
-    } else {
-      L.push("2CPC " + P.id + " v" + P.v);
-    }
-    P.questions.forEach(function (q) {
-      if (answered(q)) L.push.apply(L, lines(q, eff(q), ctx));
-    });
-    P.sections.forEach(function (s) {
-      var c = (S.c[s.id] || "").trim();
-      if (c) L.push("#" + short(s.text, 30) + "=" + JSON.stringify(c));
-    });
-    if (NX) L.push.apply(L, nextLines(ctx));
-    return L.join("\n");
-  }
+  function short(s, n) { return A.short(s, n); }
+  function build(ctx) { return A.build(NX ? P : Object.assign({}, P, { next: null }), S, ctx, t); }
   function toast(msg) {
     var el = $("#toast"); el.textContent = msg; el.classList.add("on");
     clearTimeout(toast.h); toast.h = setTimeout(function () { el.classList.remove("on"); }, 3200);
@@ -484,8 +411,16 @@
     var ok = false; try { ok = document.execCommand("copy"); } catch (e) {}
     document.body.removeChild(ta); return ok;
   }
+  // mode: false = answer, true = answer + context, "delta" = only what changed since the last sent answer
   function generate(ctx) {
-    var missing = P.questions.filter(function (q) { return q.req && !answered(q); });
+    var cur = build(false).split("\n").slice(1), txt;
+    if (ctx === "delta") {
+      if (!Array.isArray(S.sent)) return generate(false);
+      var d = A.delta(S.sent, cur);
+      if (!d.changed) { toast(t("deltaNone")); return; }
+      txt = "2CPC " + P.id + " v" + P.v + " Δ\n" + d.lines.join("\n");
+    }
+    var missing = ctx === "delta" ? [] : P.questions.filter(function (q) { return q.req && !answered(q); });
     if (missing.length) {
       missing.forEach(function (q) { var el = document.getElementById("q-" + q.id); if (el) el.classList.add("req-miss"); });
       var list = missing.map(function (q) { return "• " + short(q.label || q.id, 60); }).join("\n");
@@ -494,17 +429,160 @@
         return;
       }
     }
-    var txt = build(ctx);
+    if (ctx !== "delta") txt = build(ctx);
+    S.sent = cur; save(); deltaBtns();
     var done = function () { toast(t("copied")); };
     var fail = function () { if (fallbackCopy(txt)) done(); else showText(txt, t("copyFail")); };
     if (navigator.clipboard && window.isSecureContext !== false) navigator.clipboard.writeText(txt).then(done, fail);
     else fail();
   }
+  function deltaBtns() { $$("#btnDelta, .end-actions [data-act=delta]").forEach(function (b) { b.hidden = !Array.isArray(S.sent); }); }
   $("#btnAnswer").addEventListener("click", function () { generate(false); });
   $("#btnContext").addEventListener("click", function () { generate(true); });
+  $("#btnDelta").addEventListener("click", function () { generate("delta"); });
   $$(".end-actions [data-act]").forEach(function (b) {
-    b.addEventListener("click", function () { generate(b.dataset.act === "context"); });
+    b.addEventListener("click", function () { generate(b.dataset.act === "delta" ? "delta" : b.dataset.act === "context"); });
   });
+  deltaBtns();
+
+  // ---------- changes since v(N-1) (A3) & previous answers (A4) ----------
+  var chgBar = $("#chgBar"), chgOn = false;
+  function chgLabels() {
+    if (chgBar) {
+      $(".chg-txt", chgBar).textContent = t("chgSummary", { v: chgBar.dataset.pv, c: chgBar.dataset.c, n: chgBar.dataset.n });
+      $("#chgOnly").textContent = t(chgOn ? "chgAll" : "chgOnly");
+    }
+    $$(".prev-ans b").forEach(function (b) { b.textContent = t("prevAns", { v: prevV() }); });
+  }
+  function chgFilter() {
+    var st = null, secs = {};
+    $$("#plan > *").forEach(function (el) {
+      if (el.id === "next" || el.id === "chgBar" || el.id === "reusedBanner" || el.classList.contains("end-actions")) return;
+      if (el.dataset.sec) { st = el.dataset.sec; secs[el.id] = st; }
+      el.classList.toggle("chg-hide", chgOn && st === "same");
+    });
+    st = null;
+    $$(".toc li").forEach(function (li) {
+      var a = $("a", li), id = a && a.getAttribute("href").slice(1);
+      if (id in secs) st = secs[id]; else if (id === "next") st = null;
+      li.classList.toggle("chg-hide", chgOn && st === "same");
+    });
+  }
+  if (chgBar) $("#chgOnly").addEventListener("click", function () { chgOn = !chgOn; chgFilter(); chgLabels(); });
+
+  var prevS = P.prevKey && P.prevQ && Object.keys(P.prevQ).length ? load(P.prevKey) : null;
+  if (prevS && prevS.a) {
+    prevS.o = prevS.o || {}; prevS.c = prevS.c || {};
+    Object.keys(P.prevQ).forEach(function (id) {
+      var pq = P.prevQ[id], el = document.getElementById("q-" + id), lb = el && $(".q-label", el);
+      if (!lb || !A.answered(pq, prevS)) return;
+      var txt = A.lines(pq, A.eff(pq, prevS), true, prevS, t).map(function (l) {
+        return l.indexOf(id + ".") === 0 ? l.slice(id.length + 1).replace("=", " ") : l.slice(l.indexOf("=") + 1);
+      }).join(" · ");
+      var d = document.createElement("div");
+      d.className = "prev-ans"; d.innerHTML = "<b></b> ";
+      d.appendChild(document.createTextNode(txt));
+      lb.parentNode.insertBefore(d, lb.nextSibling);
+    });
+  }
+  chgLabels();
+
+  // ---------- !compare slider ----------
+  $$(".cmp-box input[type=range]").forEach(function (r) {
+    r.addEventListener("input", function () { r.parentNode.style.setProperty("--pos", r.value + "%"); });
+  });
+
+  // ---------- sections: search, "unanswered only" (D3), toc badges (D4) ----------
+  var SPECIAL = { next: 1, chgBar: 1, reusedBanner: 1 }, GR = null;
+  // #plan children grouped by level-1/2 heading: [{id, els, qs: [question ids]}]
+  function groups() {
+    if (GR) return GR;
+    GR = []; var cur = { id: null, els: [], qs: [] }; GR.push(cur);
+    $$("#plan > *").forEach(function (el) {
+      if (SPECIAL[el.id] || el.classList.contains("end-actions")) return;
+      if (el.tagName === "H2" || el.tagName === "H3") { cur = { id: el.id, els: [], qs: [] }; GR.push(cur); }
+      cur.els.push(el);
+      $$(".q[data-q]", el).forEach(function (q) { cur.qs.push(q.dataset.q); });
+      if (el.dataset.q) cur.qs.push(el.dataset.q);
+    });
+    return GR;
+  }
+  function fold(s) { return String(s).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, ""); }
+  function unmark() {
+    $$("mark.hit").forEach(function (m) { var p = m.parentNode; p.replaceChild(document.createTextNode(m.textContent), m); p.normalize(); });
+  }
+  function markIn(el, q) {
+    var w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, {
+      acceptNode: function (n) {
+        return n.parentNode.closest("script,style,textarea,mark,.ap-btns") ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT;
+      }
+    }), nodes = [], n;
+    while ((n = w.nextNode())) nodes.push(n);
+    nodes.forEach(function (tn) {
+      var txt = tn.nodeValue, low = txt.toLowerCase(), i = low.indexOf(q);
+      if (i < 0) return;
+      var frag = document.createDocumentFragment(), last = 0;
+      while (i >= 0) {
+        frag.appendChild(document.createTextNode(txt.slice(last, i)));
+        var m = document.createElement("mark"); m.className = "hit"; m.textContent = txt.slice(i, i + q.length);
+        frag.appendChild(m); last = i + q.length; i = low.indexOf(q, last);
+      }
+      frag.appendChild(document.createTextNode(txt.slice(last)));
+      tn.parentNode.replaceChild(frag, tn);
+    });
+  }
+  var srch = $("#search"), onlyOpen = $("#onlyOpen");
+  function applyFilters() {
+    var q = srch ? srch.value.trim() : "", fq = fold(q), open = onlyOpen && onlyOpen.checked, vis = {};
+    unmark();
+    groups().forEach(function (g) {
+      var show = true;
+      if (fq) show = fold(g.els.map(function (e) { return e.textContent; }).join(" ")).indexOf(fq) >= 0;
+      var todo = g.qs.filter(function (id) { return !answered(Q[id]); });
+      if (open && !todo.length) show = false;
+      g.els.forEach(function (e) { e.classList.toggle("f-hide", !show); });
+      g.els.forEach(function (e) {
+        $$(".q[data-q]", e).concat(e.dataset.q ? [e] : []).forEach(function (qe) {
+          qe.classList.toggle("q-hide", !!open && show && answered(Q[qe.dataset.q]));
+        });
+      });
+      if (show && q) g.els.forEach(function (e) { markIn(e, q.toLowerCase()); });
+      if (g.id) vis[g.id] = show;
+    });
+    var st = true;
+    $$(".toc li").forEach(function (li) {
+      var a = $("a", li), id = a && a.getAttribute("href").slice(1);
+      if (id in vis) st = vis[id]; else if (id === "next") st = true;
+      li.classList.toggle("f-hide", !st);
+    });
+    var first = q && $("mark.hit");
+    if (first) first.scrollIntoView({ block: "center" });
+  }
+  var srchT;
+  if (srch) srch.addEventListener("input", function () { clearTimeout(srchT); srchT = setTimeout(applyFilters, 150); });
+  if (srch) srch.addEventListener("keydown", function (e) { if (e.key === "Escape") { srch.value = ""; applyFilters(); } });
+  if (onlyOpen) onlyOpen.addEventListener("change", applyFilters);
+  document.addEventListener("keydown", function (e) {
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "F" || e.key === "f") && srch) { e.preventDefault(); srch.focus(); srch.select(); }
+  });
+  function tocBadges() {
+    var by = {};
+    groups().forEach(function (g) {
+      if (!g.id) return;
+      var left = 0, req = false;
+      g.qs.forEach(function (id) { if (!answered(Q[id])) { left++; if (Q[id].req) req = true; } });
+      by[g.id] = { n: left, req: req, any: g.qs.length > 0 };
+    });
+    $$(".toc li").forEach(function (li) {
+      var a = $("a", li), id = a && a.getAttribute("href").slice(1), b = by[id];
+      if (!b || !b.any) return;
+      var pill = $(".toc-n", li);
+      if (!pill) { pill = document.createElement("span"); pill.className = "toc-n"; a.appendChild(pill); }
+      pill.textContent = b.n ? String(b.n) : "✓";
+      pill.classList.toggle("ok", !b.n);
+      pill.classList.toggle("req", b.req);
+    });
+  }
 
   // ---------- export / import / reset / lang ----------
   function closeMenu() { var m = $(".more"); if (m) m.open = false; }

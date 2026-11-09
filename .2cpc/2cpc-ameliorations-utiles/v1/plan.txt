@@ -1,0 +1,41 @@
+title: 2CPC — améliorations utiles
+lang: fr
+intro: Liste d'améliorations de l'outil 2CPC, tirée de l'analyse du code et des 13 plans réels créés dans babaoo_game et Eridu. À trier et prioriser avant implémentation.
+
+# Constat
+!kpi Plans analysés=13 ; Versions=32 ; Max versions=9 (consent) ; Plus long=251 lignes ; Poids .2cpc=11 Mo + 4,6 Mo
+!chart hbar | Directives les plus utilisées | ?choice=190, !table=161, ?approve=77, ?yesno=41, ?text=37, !todo=35, !details=31, !mermaid=22, !img=20, !gantt=19
+!table | Observation | Conséquence
+| Les gros plans itèrent beaucoup (consent v1→v9, tuto v1→v7, 200–250 lignes) | L'agent **réécrit tout le DSL** à chaque version : coûteux en tokens
+| Chaque version recommence par un tableau « Décisions actées » réécrit à la main | Duplication, risque d'oublier une décision
+| `!img` copie les assets dans chaque `vN/` (consent : 2 PNG × 8 versions) ; dossier `_mockups` créé à la main | 11 Mo dans babaoo_game, `.2cpc` non ignoré par git dans les 2 projets
+| `!todo` très utilisé (35) mais suivi seulement côté navigateur | L'agent ne peut pas cocher ce qu'il a fait ; avancement invisible d'une version à l'autre
+| Boucle réponse = copier-coller manuel | Friction ; réponses perdues si autre navigateur (localStorage)
+| `!next` utilisé 1 fois (feature récente) | À observer, pas de changement
+| JS (`app.js`, 27 Ko) non couvert par les tests Python | Régressions possibles (ex. commit « Array display »)
+
+# A. Itérations & économie de tokens
+?approve iter | Améliorations | A1=`cpc.py patch <id>` :: remplace/ajoute/supprime des sections par titre (`## X`) sans réécrire tout le plan ; A2=Bloc `!decisions` reporté automatiquement :: les réponses validées de vN-1 deviennent un tableau « Décisions actées » dans vN ; A3=Vue « Changements depuis vN-1 » :: sections modifiées surlignées + bouton « voir seulement ce qui a changé » ; A4=Réponses de vN-1 visibles en lecture seule :: sous chaque question reprise, rappel de l'ancienne réponse/note ; A5=`cpc.py answers <id>` :: résumé texte des réponses connues (si enregistrées côté projet, cf. B)
+
+# B. Boucle de réponse
+?approve loop | Améliorations | B1=Bouton « Enregistrer dans le projet » :: télécharge `answers-vN.txt`, `cpc.py answers` le récupère depuis Téléchargements et le range dans `.2cpc/<id>/vN/` ; B2=Mode serveur local `cpc.py serve` :: les réponses s'écrivent directement dans le projet, plus de copier-coller (stdlib `http.server`) ; B3=Réponses partielles :: « Générer » ne renvoie que les nouvelles réponses depuis le dernier envoi ; B4=Raccourci clavier Ctrl+Entrée = Générer la réponse
+?choice loopmode | Approche préférée pour supprimer le copier-coller | file=Fichier téléchargé + `cpc.py answers`* :: zéro serveur, garde le côté « fichier statique » ; serve=Mini-serveur local :: le plus fluide, mais un process à lancer ; none=Garder le copier-coller :: suffisant
+
+# C. Stockage & assets
+?approve store | Améliorations | C1=Assets partagés et dédupliqués :: `.2cpc/<id>/assets/<hash>.png` au lieu d'une copie par version ; C2=Gestion `.gitignore` :: à la 1re création, proposer d'ignorer `.2cpc/` ou seulement les `index.html` (garder `plan.txt`) ; C3=`cpc.py gc` :: purge des vieilles versions / assets orphelins ; C4=Statut de plan :: `status: brouillon / actif / fait / archivé` + `list --status`
+
+# D. Navigation & vue d'ensemble
+?approve nav | Améliorations | D1=Tableau de bord `.2cpc/index.html` :: tous les plans du projet, version, date, avancement des réponses et des todos ; D2=Registre global `~/.2cpc/registry.json` :: `cpc.py list --all` liste les plans de tous les projets ; D3=Recherche dans la page :: filtre plein texte + « questions sans réponse seulement » ; D4=Sommaire collant avec pastilles :: nb de questions restantes par section
+
+# E. Contenu & DSL
+?approve dsl | Améliorations | E1=Todos synchronisés :: `cpc.py todo <id> KEY=done` coche côté agent, état affiché dans la page et reporté en vN+1 ; E2=`!compare avant.png \| après.png` :: curseur avant/après (captures de polish Eridu) ; E3=`!html fichier.html` :: maquette UI intégrée en iframe (cas `_mockups` babaoo) ; E4=« Tout valider » sur `?approve` :: ✓ en un clic puis on ne corrige que les exceptions ; E5=Lien profond vers un fichier du code :: `!link src/Foo.cs:42` ouvre dans VS Code (`vscode://`)
+
+# F. Qualité & outillage
+?approve qa | Améliorations | F1=Tests JS du rendu des réponses :: Node optionnel ou snapshot du texte généré sur la page démo ; F2=CI GitHub Actions :: `unittest` + `new --check` sur la démo ; F3=`install.py` vérifie que le skill installé est à jour :: avertit si `SKILL.md` diffère du gabarit ; F4=`rebuild --all` :: régénère les pages de tous les projets du registre après une mise à jour de l'outil
+
+# Priorités
+?rank prio | Ordre des thèmes | A=Itérations & tokens ; B=Boucle de réponse ; C=Stockage & assets ; D=Navigation ; E=Contenu & DSL ; F=Qualité
+?multi quick | Quick wins à faire tout de suite | A2=Bloc décisions auto ; B4=Ctrl+Entrée ; C2=.gitignore ; E4=Tout valider ; F3=Check du skill
+?text extra | Autres frictions rencontrées en utilisant 2CPC ?
+
+!next revise=Intégrer les réponses → plan v2 avec specs des items retenus* ; quick=Implémenter directement les quick wins cochés ; top=Implémenter le thème classé n°1 ; tests=Écrire d'abord les tests (F1/F2) avant toute évolution

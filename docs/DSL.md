@@ -3,12 +3,15 @@ Markdown + one-line directives. `!` = content, `?` = question. `|` separates fie
 Literal `|` or `;` inside a field: write `\|` / `\;`. Inline markdown (**b** *i* `code` [l](url)) works in all labels, items, details, cells.
 
 Header (top, optional): `title:` · `lang: fr|en` · `intro:` 1–2 sentences (used by "Answer + Context") · `comments: off` · `other: off` · `next: off`
+· `status: draft|active|done|archived` (or brouillon/actif/fait/archivé) · `editor: vscode|cursor|windsurf|idea|rider|none|<url with {path} {line} {col}>` (default: `~/.2cpc/config.json` → vscode)
 
-Text: `#`/`##`/`###` headings · paragraphs · `- `/`1. ` lists · `> quote` · `> note|tip|warn|danger: text` · `---`
+Text: `#`/`##`/`###` headings (optional stable anchor: `# Phase 1 {#p1}`, used by `patch` and by the "changed" badges) · paragraphs · `- `/`1. ` lists · `> quote` · `> note|tip|warn|danger: text` · `---`
 
 Content:
 ```
-!img path-or-url | caption          (paths relative to project root; copied)
+!img path-or-url | caption          (paths relative to project root; copied once per plan in .2cpc/<id>/assets/)
+!compare before.png | after.png | caption   before/after slider (same size images)
+!html mockup.html | 480 | caption  self-contained HTML page in a sandboxed iframe (height px; inline its CSS/JS)
 !audio path | caption
 !video path-or-youtube/vimeo-url | caption
 !chart bar|hbar|line|pie|donut | Title | A=12, B=8
@@ -18,11 +21,13 @@ Content:
 | a | b                             …then one row per line starting with |
 !steps A ; B ; C
 !gantt A=S1-S2 ; B=S2-S5 ; C=S6
-!link Label | path-or-url
+!link Label | path-or-url         local file: `src/Foo.cs:42[:col]` opens in the editor (header `editor:`)
 !code lang … !end    !mermaid … !end
 !cards … !end        lines: Title | desc | + pro ; - con
 !cols … !col … !end  !tabs Name … !tab Name … !end  !details Title … !end
 !draw caption … !end  sketch, see below
+!decisions [vN] [| caption]         table Question | Decision built from the answers saved for vN (default: previous
+                                    version) with `cpc.py answers <id> --save`; refreshed when answers are saved later
 ```
 
 ### `!draw` — quick sketch (rendered as SVG, no image needed)
@@ -59,7 +64,7 @@ Questions — `?type id | label | …` ; `id!` = required ; keep ids stable acro
 ?yesno id | Q [| oui|non]          (default)
 ?matrix id | Q | Row1 ; Row2 | Col1 ; Col2
 ?pick id | Q                       (choose one card of the previous !cards)
-!todo A ; B                        (tracked checklist; or !todo id | A ; B)
+!todo A ; B                        (tracked checklist; or !todo id | KEY=A ; KEY2=B — keys for `cpc.py todo`)
 ```
 Items of choice/multi/rank/approve: `KEY=Label :: detail` — KEY (`[A-Za-z0-9_.-]`, optional) is the stable
 answer key; `:: detail` (optional) is a secondary line. Use keys whenever labels are long or contain , ( ) >.
@@ -80,6 +85,31 @@ Answer pasted back: `2CPC <id> vN` then one `key=value` line per answer (unanswe
 `approve`→ one line per item: `id.KEY=✓` / `id.KEY=✗ "note"` / `id.KEY=?` / `id.KEY="note"`.
 `!next` → `next=k1>k2>"user step"` (ticked, in order) · `next.pause=oui` · `next.note="…"`.
 "Answer + Context" adds a header (title, intro, absolute paths) and short labels: `id(Label)=…`, `k(Label)`.
+
+## Revisions: `patch` and `answers`
+`cpc.py answers [<id>] --save <file|stdin>` stores pasted answers in `.2cpc/<id>/vN/answers.txt` (vN read from the
+header). `cpc.py answers <id>` prints the last saved ones.
+`cpc.py patch <id> <file> [--check]` applies operations to the last version and writes vN+1 (all or nothing):
+```
+@replace ## Phase 2            whole section, up to the next heading of the same or a higher level
+?choice db | … (no heading in the body → the original heading is kept)
+@after {#p1}                   insert after the section (@before: before it)
+# Phase 1b
+…
+@delete ### Old detail
+@append                        at the end, before !next
+@meta intro: New intro
+```
+Target: `## Exact title` (else a unique prefix; level must match) or `{#anchor}` / `#slug`.
+From v2 on, the page shows **changed** / **new** badges on sections, the removed ones, a "Changes only" filter, and,
+under a question whose label or options changed, the answer given in the previous version.
+
+## Agent-side commands
+`cpc.py todo <id> KEY… [--undo]` marks `!todo` items done (shown checked/locked "done by the agent", kept across
+versions by key; `todo <id>` lists them) · `cpc.py status <id> done` (no new version; `list` hides archived) ·
+`cpc.py gc [<id>] [--keep 3] [--yes]` removes old pages + unused assets (dry run by default; plan.txt kept) ·
+`list --all` / `rebuild --all`: every project registered in `~/.2cpc/registry.json` · `.2cpc/index.html`: dashboard.
+"What's new" answers (`2CPC <id> vN Δ`) only hold changed lines (`key=` = cleared); `answers --save` merges them.
 
 ## Example
 ```

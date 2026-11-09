@@ -11,9 +11,9 @@ def main():
         sys.exit("Python 3.8+ required")
     dest = Path.home() / ".claude" / "skills" / "2cpc"
     dest.mkdir(parents=True, exist_ok=True)
-    src = (HERE / "skill" / "SKILL.md").read_text(encoding="utf-8")
-    src = src.replace("{{CPC}}", (HERE / "cpc.py").as_posix()).replace("{{DOCS}}", (HERE / "docs" / "DSL.md").as_posix())
-    (dest / "SKILL.md").write_text(src, encoding="utf-8")
+    sys.path.insert(0, str(HERE))
+    from cpc.skill import render_skill
+    (dest / "SKILL.md").write_text(render_skill(HERE), encoding="utf-8")
     print(f"OK skill installed: {dest / 'SKILL.md'}")
 
 

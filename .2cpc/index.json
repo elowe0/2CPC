@@ -10,6 +10,25 @@
     }
    },
    "updated": "2026-11-08T16:27:32"
+  },
+  "2cpc-ameliorations-utiles": {
+   "title": "2CPC — améliorations utiles",
+   "v": 3,
+   "versions": {
+    "1": {
+     "title": "2CPC — améliorations utiles",
+     "date": "2026-11-09"
+    },
+    "2": {
+     "title": "2CPC — améliorations utiles",
+     "date": "2026-11-09"
+    },
+    "3": {
+     "title": "2CPC — améliorations utiles",
+     "date": "2026-11-09"
+    }
+   },
+   "updated": "2026-11-09T13:16:19"
   }
  }
 }

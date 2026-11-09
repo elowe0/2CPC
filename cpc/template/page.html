@@ -21,6 +21,7 @@
     </div>
     <div class="actions">
       <button type="button" id="btnAnswer" class="btn primary" data-i18n="genAnswer" data-i18n-title="genAnswerTip"></button>
+      <button type="button" id="btnDelta" class="btn" data-i18n="genDelta" data-i18n-title="genDeltaTip" hidden></button>
       <button type="button" id="btnContext" class="btn" data-i18n="genContext" data-i18n-title="genContextTip"></button>
       <details class="more">
         <summary class="btn icon" aria-label="menu">⋯</summary>
@@ -35,13 +36,18 @@
   </div>
 </header>
 <div class="layout">
-  <nav class="toc" aria-label="toc"><div class="toc-t" data-i18n="toc"></div><ul>{{TOC}}</ul></nav>
+  <nav class="toc" aria-label="toc">
+    <div class="toc-tools"><input type="search" id="search" data-i18n-ph="searchPh" data-i18n-title="searchTip">
+      <label class="only-open"><input type="checkbox" id="onlyOpen"> <span data-i18n="onlyOpen"></span></label></div>
+    <div class="toc-t" data-i18n="toc"></div><ul>{{TOC}}</ul></nav>
   <main id="plan">
     <div id="reusedBanner" class="callout note" hidden><span class="ic">↻</span><div></div></div>
+    {{CHANGES}}
     {{BODY}}
     {{NEXT}}
     <div class="end-actions">
       <button type="button" class="btn primary" data-act="answer" data-i18n="genAnswer"></button>
+      <button type="button" class="btn" data-act="delta" data-i18n="genDelta" hidden></button>
       <button type="button" class="btn" data-act="context" data-i18n="genContext"></button>
     </div>
   </main>
@@ -55,6 +61,7 @@
 </dialog>
 <div id="toast" role="status" aria-live="polite"></div>
 <script>window.PLAN={{PLAN}};window.I18N={{I18N}};</script>
+<script>{{ANSWERS_JS}}</script>
 <script>{{JS}}</script>
 </body>
 </html>

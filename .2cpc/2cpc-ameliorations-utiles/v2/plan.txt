@@ -1,0 +1,88 @@
+title: 2CPC — améliorations utiles
+lang: fr
+intro: Specs des 20 améliorations retenues en v1 (copier-coller conservé, pas de serveur ni de fichier téléchargé). À valider avant implémentation, phase par phase.
+
+# Décisions actées (v1)
+!table | Thème | Retenu | Refusé
+| A. Itérations & tokens | A1 patch · A2 décisions auto · A3 changements vN-1 · A4 anciennes réponses · A5 `answers` | —
+| B. Boucle de réponse | B3 réponses partielles | B1 fichier téléchargé · B2 serveur local → **copier-coller conservé**
+| C. Stockage | C1 assets dédupliqués · C3 `gc` · C4 statut | C2 `.gitignore`
+| D. Navigation | D1 tableau de bord · D2 registre global · D3 recherche · D4 sommaire à pastilles | —
+| E. DSL | E1 todos synchronisés · E2 `!compare` · E3 `!html` · E5 lien VS Code | E4 tout valider
+| F. Qualité | F1 tests JS · F2 CI · F3 check du skill · F4 `rebuild --all` | —
+> note: Sans B1/B2, la seule source de réponses côté disque est **le texte collé**. A5 devient donc : l'agent enregistre la réponse collée. C'est la brique dont dépendent A2, D1 et E1.
+
+# Dépendances & phases
+!mermaid
+graph LR
+  F1[F1 tests JS] --> F2[F2 CI]
+  A5[A5 answers --save] --> A2[A2 décisions auto]
+  A5 --> D1[D1 tableau de bord]
+  A5 --> E1[E1 todos]
+  D2[D2 registre] --> F4[F4 rebuild --all]
+  C1[C1 assets partagés] --> C3[C3 gc]
+  A1[A1 patch] --> A3[A3 changements]
+!end
+!gantt P0 Tests & CI=S1 ; P1 Itérations (A5 A1 A2 A3 A4)=S1-S3 ; P2 Stockage & todos (C1 C3 C4 E1)=S3-S4 ; P3 Navigation & outillage (D1-D4 F3 F4)=S4-S5 ; P4 DSL & confort (E2 E3 E5 B3)=S6
+
+# P0 — Tests & CI
+!table | Item | Spec
+| F1 | Extraire la génération de réponse (`clean`, `short`, `lines`, `nextLines`, `build`) de `app.js` vers `cpc/template/answers.js`, une fonction pure `(P, S) → texte`, inlinée dans la page. Tests `node --test tests/answers.test.js` sur des fixtures (une par type de question + Autre + next + contexte). **Ignorés si Node est absent.**
+| F2 | `.github/workflows/test.yml` : Python 3.8 et 3.12 × ubuntu/windows → `unittest` + `cpc.py new --check` sur la démo et sur `docs/DSL.md` ; Node 20 → `node --test`.
+?approve p0 | Specs P0 | F1=Extraction `answers.js` + tests Node ; F2=CI GitHub Actions (matrice ci-dessus)
+
+# P1 — Itérations & tokens
+### A5 — `cpc.py answers`
+`cpc.py answers <id> --save` (texte collé sur stdin ou `--file`) → `.2cpc/<id>/vN/answers.txt` (vN lu dans l'en-tête `2CPC id vN`). `cpc.py answers <id>` réaffiche la dernière réponse enregistrée. Le skill ajoute une étape : **à chaque réponse collée, l'enregistrer d'abord**.
+### A1 — `cpc.py patch`
+Applique un fichier de modifications à la dernière version et produit **vN+1**, sans réécrire le plan.
+!code text
+@replace ## P2 — Stockage        (remplace la section jusqu'au titre de même niveau suivant)
+…nouveau contenu…
+@after # Décisions actées         (insère après la section)
+…
+@delete ### A3 — ancienne spec
+@meta intro: Nouvelle intro
+!end
+Cible : le titre exact, ou un préfixe unique. Ambiguïté ou titre introuvable → `ERR`, rien n'est écrit.
+### A2 — Décisions reportées
+Avec `!decisions` dans vN+1, un tableau Question | Réponse est généré depuis `vN/answers.txt` (A5) : choix, ✓/✗ des approve, rank. Les libellés viennent du plan vN.
+### A3 — Changements depuis vN-1
+Au build, chaque section est comparée (hash) à celle de vN-1 → badge **modifié** / **nouveau**, plus un bouton « Changements seulement » qui masque les sections identiques. Une ligne `changed: 3 sections` s'ajoute à la sortie CLI.
+### A4 — Anciennes réponses
+Sous une question reprise dont le libellé ou les options ont changé, on affiche « v(N-1) : <réponse> » en gris. La donnée vient du localStorage de vN-1 (déjà accessible via `prev_key`).
+?approve p1 | Specs P1 | A5=`answers --save` + étape dans le skill ; A1=`patch` (@replace/@after/@delete/@meta) ; A2=`!decisions` généré depuis answers.txt ; A3=Badges modifié/nouveau + filtre ; A4=Rappel de l'ancienne réponse
+?choice patchsyn | Syntaxe de `patch` | at=Marqueurs `@replace ## Titre`* :: lisible, un fichier ; ids=Ancres explicites `{#id}` sur les titres :: plus robuste, mais il faut les poser ; both=Les deux :: ancre si présente, sinon titre
+
+# P2 — Stockage & todos
+!table | Item | Spec
+| C1 | Assets copiés une seule fois dans `.2cpc/<id>/assets/<sha8>-<nom>`, référencés en `../assets/…`. Le `rebuild` migre les anciennes versions.
+| C3 | `cpc.py gc [<id>] [--keep N]` : supprime les `index.html` des versions plus anciennes que les N dernières (**le `plan.txt` est gardé**, il reste reconstructible), plus les assets orphelins. `--dry-run` par défaut ?
+| C4 | En-tête `status: brouillon / actif / fait / archivé` + `cpc.py status <id> fait` (sans nouvelle version). `list` masque `archivé` sauf avec `--all`.
+| E1 | `!todo` accepte `KEY=Label`. `cpc.py todo <id> KEY… [--undo]` → `.2cpc/<id>/state.json`. La page affiche ✓ « fait par l'agent » (non décochable) et l'état est reporté en vN+1 par clé.
+?approve p2 | Specs P2 | C1=Assets partagés + migration ; C3=`gc` (garde plan.txt) ; C4=Statut + commande ; E1=Todos à clés + `cpc.py todo`
+?yesno gcdry | `gc` en simulation par défaut (exige `--yes` pour supprimer) ? | oui
+
+# P3 — Navigation & outillage
+!table | Item | Spec
+| D1 | `.2cpc/index.html` régénéré à chaque `new` / `patch` / `rebuild` : cartes plan → version, date, statut, todos (state.json), dernière réponse enregistrée. L'avancement en direct vient du localStorage si le navigateur le permet (Chrome partage l'origine `file://`, Firefox non).
+| D2 | `~/.2cpc/registry.json` (chemins des projets), mis à jour par `new`. `cpc.py list --all` liste les plans de tous les projets ; chemins morts ignorés.
+| D3 | Champ de recherche (Ctrl+F interne, surligne et filtre les sections) + bascule « Sans réponse seulement ».
+| D4 | Sommaire collant, avec pastille « n restantes » par section et ● si obligatoire manquante.
+| F3 | À chaque `new`, comparer le hash du SKILL.md installé au gabarit → `WARN skill outdated: python install.py`.
+| F4 | `cpc.py rebuild --all` : rebuild de tous les projets du registre.
+?approve p3 | Specs P3 | D1=Tableau de bord ; D2=Registre + `list --all` ; D3=Recherche + filtre ; D4=Sommaire à pastilles ; F3=Check du skill ; F4=`rebuild --all`
+
+# P4 — DSL & confort
+!table | Item | Spec
+| E2 | `!compare avant.png \| après.png \| légende` : curseur glissant avant/après (même taille, CSS `clip-path`).
+| E3 | `!html maquette.html \| hauteur` : iframe `sandbox="allow-scripts"`, fichier copié en asset (C1).
+| E5 | `!link Label \| src/Foo.cs:42` sur un fichier local → `vscode://file/<projet>/src/Foo.cs:42` (plus un lien `file://` de secours).
+| B3 | La page mémorise le dernier envoi. Un 2e bouton « Nouveautés » ne renvoie que les lignes ajoutées ou modifiées depuis (`2CPC id vN Δ`).
+?approve p4 | Specs P4 | E2=`!compare` ; E3=`!html` iframe sandbox ; E5=Liens VS Code ; B3=Bouton « Nouveautés »
+?choice editor | Éditeur cible pour E5 | vscode=VS Code* ; rider=Rider / JetBrains ; cfg=Réglable (`editor:` dans l'en-tête ou `~/.2cpc/config.json`)
+
+# Ordre
+?rank order | Ordre des phases après P0 | P1=Itérations ; P2=Stockage & todos ; P3=Navigation ; P4=DSL & confort
+
+!next tests=Écrire les tests P0 (F1 + F2)* ; p1=Implémenter P1 ; revise=Intégrer les réponses → v3 ; all=Enchaîner toutes les phases dans l'ordre choisi

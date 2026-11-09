@@ -1,0 +1,40 @@
+name: tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  python:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, windows-latest]
+        python: ["3.8", "3.12"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Unit tests (Python + end-to-end via Node)
+        run: python -m unittest discover -v tests
+      - name: Demo plan validates without warnings
+        shell: bash
+        run: |
+          out=$(python cpc.py new --check .2cpc/demo-2cpc-toutes-les-features/v1/plan.txt)
+          echo "$out"
+          ! echo "$out" | grep -q '^WARN'
+
+  node:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Answer generation tests
+        run: node --test tests/answers.test.js

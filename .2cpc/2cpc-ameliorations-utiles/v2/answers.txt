@@ -1,0 +1,7 @@
+2CPC 2cpc-ameliorations-utiles v2
+p0.F1=✓
+p0.F2=✓
+patchsyn=both
+gcdry=oui
+editor=cfg
+next=tests>p1>revise

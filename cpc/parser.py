@@ -7,7 +7,7 @@ import re
 
 from . import draw
 
-HEADER_KEYS = ("title", "lang", "intro", "comments", "other", "next")
+HEADER_KEYS = ("title", "lang", "intro", "comments", "other", "next", "status", "editor")
 CALLOUTS = ("note", "tip", "warn", "danger")
 QTYPES = ("choice", "multi", "text", "line", "number", "date", "scale",
           "yesno", "rank", "approve", "matrix", "pick")
@@ -54,6 +54,20 @@ def split(s, sep):
 
 def pipes(s):
     return [p.strip() for p in s.split("|")]
+
+
+_ANCHOR = re.compile(r"\s*\{#([A-Za-z0-9_.-]+)\}\s*$")
+
+
+def heading_id(raw, heads):
+    """'Title {#anchor}' -> (text, id). Without an anchor the id is the slug, deduplicated via `heads`."""
+    m = _ANCHOR.search(raw)
+    if m:
+        return raw[:m.start()].strip(), m.group(1)
+    text = raw.strip()
+    hid = slug(text)
+    heads[hid] = heads.get(hid, 0) + 1
+    return text, hid if heads[hid] == 1 else f"{hid}-{heads[hid]}"
 
 
 class Plan:
@@ -142,12 +156,8 @@ def parse(text):
         m = re.match(r"^(#{1,3})\s+(.*)$", s)
         if m:
             flush()
-            text = m.group(2).strip()
-            hid = slug(text)
-            heads[hid] = heads.get(hid, 0) + 1
-            if heads[hid] > 1:
-                hid = f"{hid}-{heads[hid]}"
-            target.append({"t": "h", "level": len(m.group(1)), "text": text, "id": hid})
+            text, hid = heading_id(m.group(2), heads)
+            target.append({"t": "h", "level": len(m.group(1)), "text": text, "id": hid, "line": i})
             i += 1
             continue
 
@@ -258,6 +268,17 @@ def parse(text):
             p = pipes(arg)
             if name in ("img", "audio", "video"):
                 target.append({"t": name, "src": p[0], "caption": p[1] if len(p) > 1 else ""})
+            elif name == "compare":
+                if len(p) < 2 or not p[0] or not p[1]:
+                    warn("!compare needs: before | after [| caption]")
+                else:
+                    target.append({"t": "compare", "a": p[0], "b": p[1], "caption": p[2] if len(p) > 2 else ""})
+            elif name == "html":
+                h = p[1] if len(p) > 1 else ""
+                if h and not h.isdigit():
+                    warn(f"!html: bad height '{h}' (pixels)")
+                target.append({"t": "html", "src": p[0], "height": int(h) if h.isdigit() else 480,
+                               "caption": p[2] if len(p) > 2 else ""})
             elif name == "chart":
                 ctype = (p[0] or "bar").lower()
                 if ctype not in ("bar", "hbar", "line", "pie", "donut"):
@@ -311,6 +332,10 @@ def parse(text):
                 nb = {"qt": "next", "id": "next"}
                 opts_parse(nb, arg, warn)
                 plan.next = nb
+            elif name == "decisions":
+                ver = p[0] if re.match(r"^v\d+$", p[0]) else None
+                title = (p[1] if len(p) > 1 else "") if ver else p[0]
+                target.append({"t": "decisions", "v": int(ver[1:]) if ver else None, "title": title})
             elif name == "link":
                 target.append({"t": "link", "label": p[0], "href": p[1] if len(p) > 1 else p[0]})
             elif name == "todo":
@@ -323,7 +348,14 @@ def parse(text):
                 if any(not x for x in items):
                     warn(f"!todo {qid}: empty item")
                     items = [x for x in items if x]
-                add_q({"t": "q", "qt": "todo", "id": qid, "label": "", "req": False, "items": items})
+                keys, labels = [], []
+                for x in items:  # `KEY=Label` -> stable key (for `cpc.py todo`), else the label is the key
+                    mk = _KEY.match(x)
+                    keys.append(mk.group(1) if mk else x)
+                    labels.append(mk.group(2).strip() if mk else x)
+                if len(set(keys)) < len(keys):
+                    warn(f"!todo {qid}: duplicate item key")
+                add_q({"t": "q", "qt": "todo", "id": qid, "label": "", "req": False, "items": labels, "keys": keys})
             else:
                 warn(f"unknown directive !{name}")
                 target.append({"t": "p", "text": s})
