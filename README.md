@@ -45,6 +45,7 @@ python cpc.py list --all                   # plans de tous les projets enregistr
 python cpc.py rebuild [ID] [--v N]         # régénérer les pages après une mise à jour de l'outil
 python cpc.py rebuild --all                # idem, pour tous les projets enregistrés
 python cpc.py gc [ID] [--keep 3] [--yes]   # vieilles pages + assets inutilisés : simulation, --yes pour supprimer
+python cpc.py apply "status ID fait ; …"   # commande copiée depuis le tableau de bord
 ```
 `gc` conserve toujours `plan.txt` et `answers.txt`. Une page supprimée reste reconstructible avec `rebuild ID --v N`.
 
@@ -65,6 +66,10 @@ Voir [docs/DSL.md](docs/DSL.md) : Markdown, plus des directives `!bloc` et des q
 - **En-tête** : `title:` `lang:` `intro:` `status:` `editor:` `comments: off` `other: off` `next: off`.
 - **Contenu** : tableaux, graphiques, KPI, gantt, cartes, onglets, mermaid, images, audio, vidéo…
   - `!draw … !end` : croquis vectoriel en quelques lignes (`box`, `circle`, `arrow`, `dot`…), rendu en SVG.
+  - `!code bash | titre … !end` et `!cmd npm install` : blocs de code et commandes **à copier** en un clic, pour écrire des tutos.
+    - Shells (bash, sh, zsh, powershell, cmd) : invite `$` / `PS>` / `>` affichée mais jamais copiée, commentaires `#` en grisé, continuations `\` conservées.
+    - `console` : seules les lignes `$ …` sont copiées ; la sortie s'affiche mais n'est pas copiée.
+    - Les blocs déjà copiés portent un ✓, mémorisé dans le navigateur pour suivre où l'on en est dans un tuto.
   - `!compare avant.png | après.png | légende` : curseur avant/après.
   - `!html maquette.html | 480 | légende` : maquette HTML autonome dans un cadre isolé (iframe *sandbox*).
   - `!link Code | src/Foo.cs:42` : ouvre le fichier à la ligne indiquée dans l'éditeur (voir *Configuration*).
@@ -75,6 +80,7 @@ Voir [docs/DSL.md](docs/DSL.md) : Markdown, plus des directives `!bloc` et des q
 - **`!next …`** : panneau « Et ensuite ? ». L'utilisateur coche et ordonne les actions que l'agent doit enchaîner, ajoute ses propres étapes, une pause entre les étapes et une consigne.
 
 ## Page
+- **Bouton « Plans »** (à gauche de l'en-tête) : ouvre le tableau de bord du projet (`.2cpc/index.html`).
 - **Générer la réponse** : texte compact (`2CPC id vN`, puis une ligne `id=valeur` par réponse), pour la session Claude en cours.
 - **Réponse + Contexte** : le même texte, précédé du titre, de l'intro, des chemins du projet et du plan, et de la commande de l'outil. À utiliser dans une nouvelle session.
 - **Nouveautés** : seulement ce qui a changé depuis le dernier envoi (`2CPC id vN Δ` ; `clé=` signifie que la réponse a été effacée).
@@ -88,13 +94,33 @@ Voir [docs/DSL.md](docs/DSL.md) : Markdown, plus des directives `!bloc` et des q
 - **Menu ⋯** : Exporter / Importer (.json), Réinitialiser, FR/EN.
 - **Stockage des réponses** : localStorage, sous la clé `2cpc:<projet>:<id>:vN`. Elles sont propres au navigateur : utilisez Exporter pour les sauvegarder.
 
+## Tableau de bord
+`.2cpc/index.html` est régénéré à chaque création, révision, enregistrement de réponse ou changement de statut. Il liste tous les plans du projet sous forme de tuiles.
+- **Contenu d'une tuile** : icône, titre, statut, version, todos cochés par l'agent, réponses enregistrées et avancement des réponses dans ce navigateur.
+- **Tris** : dernière mise à jour, création, titre, statut, avancement, todos restants.
+- **Filtres** : pastilles de statut, recherche texte, « Réponses en attente », « Todos restants », motif d'icône. Les archivés sont masqués par défaut.
+- **Vue** : grille ou liste. Tris, filtres et vue sont mémorisés dans le navigateur.
+- **Icône** : le tableau de bord a sa propre icône (camembert, couleur tirée du nom du projet), en favicon et à côté du titre.
+- **Changer un statut** : le menu déroulant d'une tuile applique le changement à l'écran et le met en attente. Une barre propose alors **Copier la commande** (`cpc.py apply "status … ; …"`), à coller dans un terminal ou dans Claude. Une page `file://` ne peut pas écrire sur le disque, d'où cette étape. Il n'y a pas de suppression : un plan dont on ne veut plus est archivé.
+
+### Icônes
+Chaque plan reçoit une icône pixel art 64×64 (`.2cpc/<id>/icon.png`), générée en Python sans dépendance et **sans aucun token** côté agent.
+- **Motif** : choisi parmi 80 (16 familles : audio, UI, sécurité, build, bug, carte, personnage, art, data, paiement, réseau, mail, doc, perf, test, store) d'après les mots du titre (poids 3) et de l'intro (poids 1), en français et en anglais.
+- **Couleurs et fond** : tirés d'un hash de l'id, donc deux plans au même motif restent distincts.
+- **Sans mot-clé reconnu** : une « créature » symétrique générée à partir du hash.
+- **Génération** : une seule fois, puis le motif est figé. Le dessin est recentré automatiquement ; il est redessiné, avec le même motif, seulement si le moteur de rendu change (`iconv` dans `state.json`).
+- **Affichage** : dans le tableau de bord, en favicon et dans l'en-tête de la page du plan, et le nom du motif apparaît dans `list` (`<speaker>`).
+- **Bibliothèque** : `cpc/motifs.py`, une grille 16×16 et une liste de mots-clés par motif. Contour et ombrage sont calculés automatiquement.
+
 ## Fichiers
 ```
 <projet>/.2cpc/
   index.html              tableau de bord : plans, statut, todos, réponses enregistrées, avancement
   index.json              index des plans (versions, dates, statut)
+  dashboard.png           icône du tableau de bord (favicon, bouton « Plans » des pages)
   <id>/assets/            images et maquettes, copiées une seule fois par plan (<hash>-<nom>)
-  <id>/state.json         todos cochés par l'agent
+  <id>/icon.png           icône 64×64 du plan (générée une fois)
+  <id>/state.json         todos cochés par l'agent, motif de l'icône
   <id>/vN/plan.txt        source DSL de la version
   <id>/vN/index.html      page générée
   <id>/vN/answers.txt     réponse enregistrée (cpc.py answers --save)
@@ -119,7 +145,9 @@ cpc/parser.py             DSL → blocs
 cpc/render.py             blocs → page HTML (cpc/template/ : page.html, style.css, app.js, answers.js)
 cpc/patch.py              sections, @opérations de patch, changements entre versions
 cpc/answers.py            lecture des réponses collées, tableau !decisions, fusion Δ
-cpc/dashboard.py          .2cpc/index.html
+cpc/dashboard.py          .2cpc/index.html (tuiles, tris, filtres, commande apply)
+cpc/icons.py              icônes : encodeur PNG, choix du motif par mots-clés, contour/ombrage, créature de repli
+cpc/motifs.py             bibliothèque des 80 motifs 16×16 + mots-clés FR/EN
 cpc/skill.py              rendu du skill (install.py et vérification « skill outdated »)
 cpc/charts.py, draw.py    graphiques SVG et croquis !draw
 ```

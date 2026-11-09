@@ -533,14 +533,14 @@ class P2CliTest(CliBase):
     def test_status_header_command_and_list(self):
         self.run_cli(["new", "--no-open"], "title: A\nstatus: brouillon\n# S\n")
         self.run_cli(["new", "--no-open"], "title: B\n# S\n")
-        self.assertIn("[draft] A", self.run_cli(["list"]))
+        self.assertIn("[draft] <creature> A", self.run_cli(["list"]))
         self.assertIn("v1 · ", self.page_plan("a")[0])
         self.assertIn('class="st st-draft">brouillon', self.page_plan("a")[0])
         self.assertEqual(self.run_cli(["status", "b", "archivé"]).strip(), "OK b [archived]")
         out = self.run_cli(["list"])
-        self.assertNotIn("] B", out)
+        self.assertNotIn("> B", out)
         self.assertIn("(1 archived: list --archived)", out)
-        self.assertIn("[archived] B", self.run_cli(["list", "--archived"]))
+        self.assertIn("[archived] <creature> B", self.run_cli(["list", "--archived"]))
         with self.assertRaises(SystemExit):
             self.run_cli(["status", "b", "bof"])
         self.assertIn("WARN bad status 'bof'", self.run_cli(["new", "--no-open"], "title: C\nstatus: bof\n# S\n"))
@@ -584,17 +584,36 @@ class P2CliTest(CliBase):
 
 
 class P3CliTest(CliBase):
+    def dash(self):
+        html = (self.dir / ".2cpc" / "index.html").read_text(encoding="utf-8")
+        return html, json.loads(html.split("window.DASH=")[1].split(";</script>")[0])
+
     def test_dashboard(self):
         self.run_cli(["new", "--no-open"], TODO_PLAN)
         self.run_cli(["todo", "t", "test"])
         self.run_cli(["answers", "--save"], "2CPC t v1\ngo=oui\n")
-        self.run_cli(["new", "--no-open"], "title: Old\nstatus: archived\n# S\n")
-        html = (self.dir / ".2cpc" / "index.html").read_text(encoding="utf-8")
-        self.assertIn('href="t/v1/index.html"', html)
-        self.assertIn("<span>1/3</span>", html)
-        self.assertIn("Réponses enregistrées</span><span>v1", html)
-        self.assertIn('data-total="1"', html)
-        self.assertIn("Archivés (1)", html)
+        self.run_cli(["new", "--no-open"], "title: Sons du village\nstatus: archived\n# S\n?yesno x | X\n")
+        html, d = self.dash()
+        self.assertIn('id="pending"', html)
+        p = {x["id"]: x for x in d["plans"]}
+        t, s = p["t"], p["sons-du-village"]
+        self.assertEqual((t["todoDone"], t["todoTotal"], t["saved"], t["pending"], t["qTotal"]), (1, 3, 1, False, 1))
+        self.assertEqual((t["href"], t["icon"], t["status"]), ("t/v1/index.html", "t/icon.png", "active"))
+        self.assertEqual((s["status"], s["motif"], s["family"], s["pending"]), ("archived", "speaker", "audio", True))
+        self.assertEqual({m["name"] for m in d["motifs"]}, {"creature", "speaker"})
+        self.assertTrue(d["tool"].endswith("cpc.py"))
+
+    def test_apply(self):
+        self.run_cli(["new", "--no-open"], "title: A\n# S\n")
+        self.run_cli(["new", "--no-open"], "title: B\n# S\n")
+        out = self.run_cli(["apply", "status a done ; status b archivé"])
+        self.assertEqual(out.split(), ["OK", "a", "[done]", "OK", "b", "[archived]"])
+        _, d = self.dash()
+        self.assertEqual({x["id"]: x["status"] for x in d["plans"]}, {"a": "done", "b": "archived"})
+        for bad in ("status a bof", "status zz done", "delete a", "status a done ; status b"):
+            with self.assertRaises(SystemExit):
+                self.run_cli(["apply", bad])
+        self.assertIn("[done]", self.run_cli(["list"]))  # nothing applied by the failed calls
 
     def test_registry_list_all_rebuild_all(self):
         self.run_cli(["new", "--no-open"], "title: One\n# S\n")
@@ -620,6 +639,106 @@ class P3CliTest(CliBase):
         from cpc.skill import render_skill
         skill.write_text(render_skill(ROOT), encoding="utf-8")
         self.assertNotIn("WARN", self.run_cli(["new", "--no-open"], "title: S\n# S\n"))
+
+
+class IconTest(unittest.TestCase):
+    def test_library_shapes(self):
+        from cpc.motifs import MOTIFS, FAMILIES
+        self.assertEqual(len(MOTIFS), 80)
+        self.assertEqual(len(FAMILIES), 16)
+        for name, mo in MOTIFS.items():
+            self.assertLessEqual(len(mo["px"]), 16, name)
+            self.assertTrue(all(len(r) <= 16 and set(r) <= set(".#+*@") for r in mo["px"]), name)
+            self.assertTrue(mo["kw"], name)
+
+    def test_choose(self):
+        from cpc.icons import choose
+        cases = {"Sons de la scène Village": "speaker", "Blocage après validation du mail — pistes serveur": "blocked",
+                 "Scène de Tutoriel (FirstTuto)": "cap", "Skill Grappel / Grappel Pull": "hook",
+                 "Tableau de bord interactif": "pie", "Décor des parcelles de bâtiments": "house"}
+        for title, want in cases.items():
+            self.assertEqual(choose(title)[0], want, title)
+        self.assertEqual(choose("Démo 2CPC — toutes les features"), (None, 0))
+        self.assertEqual(choose("Refonte", "intro sur le paiement Stripe")[0], "coin")  # intro words count too
+
+    def test_png(self):
+        from cpc.icons import make_icon
+        import struct as st
+        d = Path(tempfile.mkdtemp())
+        try:
+            name = make_icon(d / "i.png", "sons", "Sons du village")
+            data = (d / "i.png").read_bytes()
+            self.assertEqual(name, "speaker")
+            self.assertEqual(data[:8], b"\x89PNG\r\n\x1a\n")
+            self.assertEqual(st.unpack(">II", data[16:24]), (64, 64))
+            make_icon(d / "j.png", "autre-id", "Sons du village")
+            self.assertNotEqual(data, (d / "j.png").read_bytes())  # same motif, other colors
+            self.assertEqual(make_icon(d / "k.png", "x", "Rien à voir"), "creature")
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
+
+class CodeBlockTest(unittest.TestCase):
+    def render(self, dsl):
+        import html as h
+        ctx = Ctx(tempfile.gettempdir(), tempfile.gettempdir(), set())
+        b = parse(dsl).blocks[0]
+        out = block(b, ctx)
+        m = re.search(r'data-copy="([^"]*)"', out)
+        return out, h.unescape(m.group(1)) if m else None
+
+    def test_code_title_and_copy(self):
+        out, copy = self.render('!code python | src/app.py\ndef f(a, b):\n    return a | b  # <x>\n!end\n')
+        self.assertIn('<span class="code-t">src/app.py</span>', out)
+        self.assertIn('data-i18n="copyBtn"', out)
+        self.assertEqual(copy, "def f(a, b):\n    return a | b  # <x>")
+        self.assertIn("&lt;x&gt;", out)
+
+    def test_shell_prompts_comments_continuation(self):
+        dsl = "!code bash\n# install\nnpm install \\\n  --save x\n\ngit status\n!end\n"
+        out, copy = self.render(dsl)
+        self.assertIn('class="codeb shell"', out)
+        self.assertIn('<span class="ln cmt"># install</span>', out)
+        self.assertIn('<span class="ln cmd" data-p="$">git status</span>', out)
+        self.assertIn('<span class="ln cont">  --save x</span>', out)
+        self.assertEqual(copy, "# install\nnpm install \\\n  --save x\n\ngit status")
+        out, _ = self.render("!code powershell\nGet-ChildItem\n!end\n")
+        self.assertIn('data-p="PS&gt;"', out)
+
+    def test_console_output_not_copied(self):
+        out, copy = self.render("!code console\n$ python cpc.py list\nplan-a v1\n$ echo ok\nok\n!end\n")
+        self.assertEqual(copy, "python cpc.py list\necho ok")
+        self.assertIn('<span class="ln out">plan-a v1</span>', out)
+
+    def test_cmd(self):
+        out, copy = self.render('!cmd grep -rn "a\\|b" src | sort ; echo done\n')
+        self.assertEqual(copy, 'grep -rn "a\\|b" src | sort ; echo done')
+        self.assertIn('class="cmdline"', out)
+        self.assertIn("!cmd: empty command", parse("!cmd\n").warnings[0])
+
+
+class IconCliTest(CliBase):
+    def test_icon_frozen_motif_redrawn_on_renderer_change(self):
+        from cpc.icons import RENDER_VERSION
+        self.run_cli(["new", "--no-open"], "title: Sons du village\n# S\n")
+        pdir = self.dir / ".2cpc" / "sons-du-village"
+        st = json.loads((pdir / "state.json").read_text(encoding="utf-8"))
+        self.assertEqual((st["icon"], st["iconv"]), ("speaker", RENDER_VERSION))
+        st.update(icon="hook", iconv=RENDER_VERSION - 1)  # frozen motif + old drawing
+        (pdir / "state.json").write_text(json.dumps(st), encoding="utf-8")
+        before = (pdir / "icon.png").read_bytes()
+        self.run_cli(["rebuild"])
+        st = json.loads((pdir / "state.json").read_text(encoding="utf-8"))
+        self.assertEqual((st["icon"], st["iconv"]), ("hook", RENDER_VERSION))
+        self.assertNotEqual(before, (pdir / "icon.png").read_bytes())
+        html = self.page_plan("sons-du-village")[0]
+        self.assertIn('<link rel="icon" type="image/png" href="../icon.png">', html)
+        self.assertIn('<a class="home" href="../../index.html"', html)  # header button -> project dashboard
+        v1 = self.dir / ".2cpc" / "sons-du-village" / "v1"
+        self.assertTrue((v1 / "../../index.html").resolve().is_file())
+        self.assertTrue((v1 / "../../dashboard.png").resolve().is_file())
+        dash = (self.dir / ".2cpc" / "index.html").read_text(encoding="utf-8")
+        self.assertIn('<link rel="icon" type="image/png" href="data:image/png;base64,', dash)
 
 
 class P4CliTest(CliBase):

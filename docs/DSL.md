@@ -22,7 +22,12 @@ Content:
 !steps A ; B ; C
 !gantt A=S1-S2 ; B=S2-S5 ; C=S6
 !link Label | path-or-url         local file: `src/Foo.cs:42[:col]` opens in the editor (header `editor:`)
-!code lang … !end    !mermaid … !end
+!code lang [| title] … !end        code + Copy button (title: e.g. a file name)
+                                   bash/sh/zsh/powershell/cmd: prompt per line (not copied), # comments,
+                                   `\` `` ` `` `^` continuations; console: `$ ` lines are commands, the rest is
+                                   output (shown, never copied). Copied blocks get a ✓ (remembered: tutorials)
+!cmd npm install                   one copyable command line (verbatim, `|` allowed)
+!mermaid … !end
 !cards … !end        lines: Title | desc | + pro ; - con
 !cols … !col … !end  !tabs Name … !tab Name … !end  !details Title … !end
 !draw caption … !end  sketch, see below
@@ -108,7 +113,10 @@ under a question whose label or options changed, the answer given in the previou
 `cpc.py todo <id> KEY… [--undo]` marks `!todo` items done (shown checked/locked "done by the agent", kept across
 versions by key; `todo <id>` lists them) · `cpc.py status <id> done` (no new version; `list` hides archived) ·
 `cpc.py gc [<id>] [--keep 3] [--yes]` removes old pages + unused assets (dry run by default; plan.txt kept) ·
-`list --all` / `rebuild --all`: every project registered in `~/.2cpc/registry.json` · `.2cpc/index.html`: dashboard.
+`list --all` / `rebuild --all`: every project registered in `~/.2cpc/registry.json` · `.2cpc/index.html`: dashboard
+(sort / filter / status menu; status changes are copied as `cpc.py apply "status <id> <value> ; …"`).
+Each plan gets a 64×64 pixel-art icon (`.2cpc/<id>/icon.png`), picked from the title + intro keywords (80 motifs,
+cpc/motifs.py), colors from the id hash; generated once. Clear, specific titles give better icons.
 "What's new" answers (`2CPC <id> vN Δ`) only hold changed lines (`key=` = cleared); `answers --save` merges them.
 
 ## Example

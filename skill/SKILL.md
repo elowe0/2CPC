@@ -21,6 +21,8 @@ Then tell the user, in one short line, to answer and click "Générer la répons
 - Spatial content (layout, zones, distances, paths, trajectories, wireframes) → add a `!draw` sketch (few lines,
   see DSL) instead of describing coordinates in prose. Flow/sequence logic → `!mermaid`.
 - `!img` only for files that exist in the project or URLs the user gave you; never guess web image URLs.
+- Tutorials / setup steps → `!cmd <one command>` and `!code bash` (or `console` with `$ ` lines + output) blocks:
+  each gets a Copy button; prompts and console output are never copied.
 - Before/after screenshots → `!compare a.png | b.png`; an HTML mockup → `!html file.html | 480`; code → `!link Label | src/File.cs:42`.
 
 ## Answers pasted back
@@ -44,11 +46,13 @@ For a revision (answers to unchanged ids/item keys carry over; keep them stable;
 - Execution plans: give `!todo` items keys (`!todo t | build=Build APK ; test=Test`), then mark each one as you finish it:
   `python "{{CPC}}" todo <id> build` (shows checked "done by the agent", kept across versions).
 - Plan finished / abandoned: `python "{{CPC}}" status <id> done|archived`.
+- A pasted `… cpc.py … apply "status … ; …"` line comes from the dashboard (.2cpc/index.html): run it as is.
+- Titles: concrete subject words ("Sons de la scène Village", "Paiement Stripe") → the plan icon is picked from them.
 - A pasted header `2CPC <id> vN Δ` = only what changed since the last answer (`key=` = cleared): save it (merged), act on
   the merged set (`answers <id>` prints it).
 
 ## Other
-`open [id]` reopen · `list [--all]` · `path <id>` · `answers [id]` · `gc` · `rebuild [--all]` · `--no-open`
+`open [id]` reopen · `list [--all]` · `path <id>` · `answers [id]` · `apply` · `gc` · `rebuild [--all]` · `--no-open`
 
 ## Token rules
 Concise DSL, no filler prose; prefer questions over long explanations; no "Other?" text question for a choice (an "Other…" field is built in); use item keys (`KEY=Label`) for long

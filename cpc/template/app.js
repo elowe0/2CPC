@@ -487,6 +487,25 @@
   }
   chgLabels();
 
+  // ---------- copyable code blocks (!code, !cmd): "copied" state is remembered (tutorial progress) ----------
+  S.cp = S.cp || {};
+  function copyText(txt, ok) {
+    var fb = function () { if (fallbackCopy(txt)) ok(); else showText(txt, t("copyFail")); };
+    if (navigator.clipboard && window.isSecureContext !== false) navigator.clipboard.writeText(txt).then(ok, fb);
+    else fb();
+  }
+  $$("[data-copy]").forEach(function (box) {
+    var btn = $(".copy", box);
+    if (S.cp[box.dataset.ck]) box.classList.add("copied");
+    if (btn) btn.addEventListener("click", function () {
+      copyText(box.dataset.copy, function () {
+        box.classList.add("copied"); btn.textContent = t("copyDone");
+        S.cp[box.dataset.ck] = 1; save();
+        setTimeout(function () { btn.textContent = t("copyBtn"); }, 1600);
+      });
+    });
+  });
+
   // ---------- !compare slider ----------
   $$(".cmp-box input[type=range]").forEach(function (r) {
     r.addEventListener("input", function () { r.parentNode.style.setProperty("--pos", r.value + "%"); });

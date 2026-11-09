@@ -46,6 +46,12 @@ class Ctx:
         self.default_dec_v = None
         self.sec_status = {}  # section id -> "chg" | "new" (only for v > 1)
         self.editor = "vscode"
+        self.copies = 0
+
+    def next_copy(self):
+        """Stable index of a copyable block (remembers "copied" state in the page)."""
+        self.copies += 1
+        return self.copies
 
     def asset(self, src):
         """Copy a local asset once per plan into <plan>/assets/<sha8>-<name>, return its URL from vN/ (or None).
@@ -75,6 +81,51 @@ class Ctx:
         url = f"../assets/{name}"
         self.copied[p] = url
         return url
+
+
+SHELLS = {"bash": "$", "sh": "$", "shell": "$", "zsh": "$", "console": "$", "terminal": "$",
+          "powershell": "PS>", "pwsh": "PS>", "ps": "PS>", "ps1": "PS>", "cmd": ">", "bat": ">", "batch": ">"}
+_PROMPT = re.compile(r"^(\$|PS[^>]*>|>)\s?")
+
+
+def code_block(b, ctx):
+    """Code with a header (language or file name) and a Copy button.
+
+    Shell languages: each line gets a prompt (not selectable, not copied); `#`/`REM`/`::` lines are comments;
+    a line ending with `\\`, `` ` `` or `^` continues on the next one. In `console` blocks only the lines starting
+    with a prompt (`$ `, `PS> `, `> `) are commands; the others are output, shown dimmed and never copied."""
+    lang, text = b["lang"].strip(), b["text"]
+    low = lang.lower()
+    k = ctx.next_copy()
+    head = (f'<div class="code-h"><span class="code-t">{esc(b.get("title") or lang or "code")}</span>'
+            f'<button type="button" class="copy" data-i18n="copyBtn"></button></div>')
+    if low not in SHELLS:
+        return (f'<figure class="codeb" data-copy="{esc(text)}" data-ck="{k}">{head}'
+                f'<pre class="code" data-lang="{esc(lang)}"><code>{esc(text)}</code></pre></figure>')
+    prompt, console = SHELLS[low], low in ("console", "terminal")
+    out, copy, cont = [], [], False
+    for ln in text.split("\n"):
+        s = ln.strip()
+        if console and not cont:
+            m = _PROMPT.match(ln)
+            if not m:
+                out.append(f'<span class="ln out">{esc(ln)}</span>')
+                continue
+            ln, p = ln[m.end():], m.group(1)
+        else:
+            p = prompt
+        if cont:
+            kind = "cont"
+        elif s.startswith("#") or s.upper().startswith("REM ") or s.startswith("::"):
+            kind = "cmt"
+        else:
+            kind = "cmd" if s else "cont"
+        attr = f' data-p="{esc(p)}"' if kind == "cmd" else ""
+        out.append(f'<span class="ln {kind}"{attr}>{esc(ln)}</span>')
+        copy.append(ln)
+        cont = bool(s) and s[-1] in "\\`^"
+    return (f'<figure class="codeb shell" data-copy="{esc(chr(10).join(copy).strip(chr(10)))}" data-ck="{k}">{head}'
+            f'<pre class="code" data-lang="{esc(lang)}"><code>{"".join(out)}</code></pre></figure>')  # lines = blocks
 
 
 def missing(src):
@@ -281,7 +332,11 @@ def block(b, ctx, top=False):
         rows = "".join("<tr>" + "".join(f"<td>{inline(c)}</td>" for c in r) + "</tr>" for r in b["rows"])
         return f'<div class="tbl"><table>{f"<thead><tr>{head}</tr></thead>" if head else ""}<tbody>{rows}</tbody></table></div>'
     if t == "code":
-        return f'<pre class="code" data-lang="{esc(b["lang"])}"><code>{esc(b["text"])}</code></pre>'
+        return code_block(b, ctx)
+    if t == "cmd":
+        k = ctx.next_copy()
+        return (f'<div class="cmdline" data-copy="{esc(b["text"])}" data-ck="{k}"><code><span class="pr">$</span>'
+                f'{esc(b["text"])}</code><button type="button" class="copy" data-i18n="copyBtn"></button></div>')
     if t == "mermaid":
         ctx.mermaid = True
         return (f'<figure class="mermaid-wrap"><pre class="mermaid">{esc(b["text"])}</pre>'
@@ -480,6 +535,8 @@ def render_page(plan, info, root, vdir, new_ids):
         "{{CSS}}": (TPL / "style.css").read_text(encoding="utf-8"),
         "{{ANSWERS_JS}}": (TPL / "answers.js").read_text(encoding="utf-8"),
         "{{JS}}": (TPL / "app.js").read_text(encoding="utf-8"),
+        "{{FAVICON}}": '<link rel="icon" type="image/png" href="../icon.png">' if info.get("icon") else "",
+        "{{ICON}}": '<img class="plan-icon" src="../icon.png" alt="" width="40" height="40">' if info.get("icon") else "",
         "{{CHANGES}}": changes,
         "{{BODY}}": body,
         "{{TOC}}": toc + ('<li class="l1"><a href="#next" data-i18n="nextTitle"></a></li>' if nxt else ""),

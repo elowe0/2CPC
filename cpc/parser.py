@@ -241,8 +241,10 @@ def parse(text):
                 continue
             if name in RAW:
                 body, i = raw_until_end(i, name)
-                if name == "code":
-                    target.append({"t": "code", "lang": arg, "text": "\n".join(body)})
+                if name == "code":  # !code lang [| title / file name]
+                    lang, _, title = arg.partition("|")
+                    target.append({"t": "code", "lang": lang.strip(), "title": _unesc(title.strip()),
+                                   "text": "\n".join(body)})
                 elif name == "mermaid":
                     target.append({"t": "mermaid", "text": "\n".join(body)})
                 elif name == "draw":
@@ -265,6 +267,12 @@ def parse(text):
                     target.append(blk)
                 continue
 
+            if name == "cmd":  # one copyable shell command; the whole line is the command (pipes allowed)
+                if not arg:
+                    warn("!cmd: empty command")
+                else:
+                    target.append({"t": "cmd", "text": _reesc(arg)})  # verbatim: keeps `\|` (grep "a\|b")
+                continue
             p = pipes(arg)
             if name in ("img", "audio", "video"):
                 target.append({"t": name, "src": p[0], "caption": p[1] if len(p) > 1 else ""})

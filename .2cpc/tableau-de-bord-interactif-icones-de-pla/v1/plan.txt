@@ -1,0 +1,60 @@
+title: Tableau de bord interactif + icônes de plan
+lang: fr
+intro: Rendre .2cpc/index.html interactif (statut, suppression, tri, filtres) et donner à chaque plan une icône pixel art 64×64 unique, liée au sujet, générée en Python sans coût de tokens notable.
+
+# Contraintes {#ctx}
+!kpi Page=file:// statique ; Serveur=aucun (refusé en v1) ; Budget icône=≈0–10 tokens/plan
+> warn: Une page `file://` **ne peut pas écrire sur le disque** toute seule. Changer un statut ou supprimer un plan depuis le tableau de bord demande donc un mécanisme en plus.
+
+# 1. Interactivité {#ui}
+!draw Tuile de plan (proposition)
+box 0,0 30,12 .empty
+box 1,1 6,6 .purple sprite 64×64
+text 8,2 Titre du plan
+text 8,4 v3 · 09/11 · id
+box 8,5.5 7,1.6 .green statut ▾
+box 1,8 28,1 .blue avancement réponses
+box 1,10 13,1 .yellow todos 2/5
+box 22,10 3,1.2 .gray ⋯
+!end
+!table | Fonction | Proposition
+| Statut | Menu déroulant sur la tuile : brouillon / actif / fait / archivé
+| Suppression | Menu ⋯ → Supprimer (avec confirmation)
+| Tri | Mise à jour, création, titre, statut, avancement (mémorisé dans le navigateur)
+| Filtres | Pastilles de statut, recherche texte, « avec réponses en attente », « todos restants »
+| Vue | Grille ou liste compacte
+
+### Écriture sur le disque
+!cards
+Commande à coller | La page applique le changement tout de suite (localStorage) et met les actions en file. Un bouton « Appliquer » copie une commande, `cpc.py apply "status a done ; delete b"`, à coller dans un terminal ou dans Claude. | + marche partout (Firefox compris) ; + cohérent avec le copier-coller des réponses ; - une étape manuelle
+Accès direct au dossier | API File System Access (Chrome / Edge) : on clique une fois sur « Connecter .2cpc » par session, puis la page écrit `index.json` et déplace les plans supprimés. | + immédiat ; - pas sous Firefox (repli sur la commande) ; - fonctionnement en file:// à valider par un prototype
+Mini-serveur local | `cpc.py dash` sert le tableau de bord sur 127.0.0.1 avec une petite API d'écriture | + le plus fluide ; - un processus à lancer ; - écarté pour les réponses en v1
+!end
+?pick write! | Mécanisme d'écriture
+?choice del | Que fait « Supprimer » ? | trash=Corbeille `.2cpc/_trash/<id>-<date>/`* :: récupérable, vidée par `gc --yes` ; hard=Suppression définitive ; arch=Pas de suppression, seulement « archivé »
+?multi sorts | Tris utiles | upd=Dernière mise à jour* ; created=Date de création ; title=Titre ; status=Statut ; prog=Avancement des réponses ; todo=Todos restants
+?multi filters | Filtres utiles | st=Pastilles de statut* ; txt=Recherche texte* ; pend=Réponses en attente ; todo=Todos restants ; icon=Par motif d'icône
+?yesno global | Ajouter aussi un tableau de bord global (tous les projets du registre, `~/.2cpc/index.html`) ? | oui
+
+# 2. Icônes pixel art {#icons}
+Prototype (stdlib, encodeur PNG maison, grilles 16×16 agrandies ×4 avec contour et ombrage calculés). **Ligne du haut** : créature générée par le hash de l'id seul. **Ligne du bas** : motif choisi selon le sujet (haut-parleur, bouclier, engrenage, maison) ; la couleur et le fond viennent toujours du hash.
+!img C:/Users/blackbox/AppData/Local/Temp/claude/a599e41953b40bc1/dfe160e3-b3ab-4591-ab2c-072505a7f9f7/scratchpad/icons/out/sheet.png | Prototype : sons village · consent · build APK · décor village · grappin · tuto
+> note: Le coût en tokens se joue sur **qui choisit le motif**. Générer le PNG ne coûte rien : c'est du Python déterministe.
+
+!cards
+Hash seul | Créature symétrique tirée de l'id | + 0 token ; + toujours unique ; - aucun lien avec le sujet
+Mots-clés automatiques | Le script compare les mots du titre et de l'intro (FR/EN) à une bibliothèque de motifs ; couleur et fond viennent du hash ; à défaut, créature | + 0 token agent ; + lié au sujet ; - bibliothèque à dessiner une fois ; - un mot-clé peut être mal reconnu
+Mots-clés + `icon:` | Comme ci-dessus, mais l'agent peut forcer le motif dans l'en-tête (`icon: speaker`, `icon: shield #c33`) | + ≈3–5 tokens seulement quand il le faut ; + corrige les erreurs de mots-clés ; - liste des motifs à connaître (1 ligne dans DSL.md)
+Dessin par l'agent | L'agent écrit une grille 16×16 en ASCII dans le plan | + sur mesure ; - ≈200–300 tokens par plan ; - qualité variable
+!end
+?pick iconmode! | Approche des icônes
+?choice libsize | Taille de la bibliothèque de motifs | s=≈24 motifs :: génériques ; m=≈48 motifs* :: couvre jeu + app + infra ; l=≈80 motifs :: plus long à dessiner
+?approve themes | Familles de motifs | audio=Son / musique ; ui=UI / popup / écran ; sec=Sécurité / RGPD / consentement ; build=Build / CI / APK ; bug=Bug / blocage ; map=Carte / niveau / décor ; char=Personnage / skill / combat ; art=Art / 3D / voxel ; data=Data / analytics / tracking ; pay=Paiement / abonnement ; net=Serveur / réseau / API ; mail=Mail / notif ; doc=Doc / tuto ; perf=Perf / optimisation ; test=Tests / QA ; store=Store / publication
+?choice same | Deux plans avec le même motif : comment les distinguer ? | hue=Teinte + motif de fond tirés du hash* ; badge=Plus un petit badge (initiale ou chiffre) dans un coin ; var=Plus des variations de forme (miroir, accessoire)
+?multi uses | Où afficher l'icône | dash=Tuiles du tableau de bord* ; fav=Favicon de la page du plan* ; head=En-tête de la page du plan ; list=`list` (non : terminal)
+?yesno regen | Régénérer l'icône à chaque version (si le titre ou `icon:` changent), sinon la figer à la v1 ? | non
+
+# Questions ouvertes
+?text other | Autre chose pour le tableau de bord ?
+
+!next revise=Intégrer les réponses → v2 avec specs détaillées* ; icons=Commencer par le générateur d'icônes (bibliothèque + PNG) ; dash=Commencer par l'interactivité du tableau de bord ; all=Tout implémenter dans la foulée

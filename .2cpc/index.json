@@ -9,7 +9,8 @@
      "date": "2026-11-08"
     }
    },
-   "updated": "2026-11-08T16:27:32"
+   "updated": "2026-11-08T16:27:32",
+   "status": "draft"
   },
   "2cpc-ameliorations-utiles": {
    "title": "2CPC — améliorations utiles",
@@ -28,7 +29,20 @@
      "date": "2026-11-09"
     }
    },
-   "updated": "2026-11-09T13:16:19"
+   "updated": "2026-11-09T13:16:19",
+   "status": "archived"
+  },
+  "tableau-de-bord-interactif-icones-de-pla": {
+   "title": "Tableau de bord interactif + icônes de plan",
+   "v": 1,
+   "versions": {
+    "1": {
+     "title": "Tableau de bord interactif + icônes de plan",
+     "date": "2026-11-09"
+    }
+   },
+   "updated": "2026-11-09T13:56:25",
+   "status": "archived"
   }
  }
 }

@@ -10,6 +10,7 @@
   cpc.py list [--all] [--archived]
   cpc.py todo ID [KEY ...] [--undo]   ·   cpc.py status ID draft|active|done|archived
   cpc.py gc [ID] [--keep N] [--yes]   (dry run by default)
+  cpc.py apply "status ID VALUE ; ..."   (operations copied from the dashboard)
   cpc.py answers [ID] [--save] [--file F] [--v N]   (save pasted answers / print the last saved)
   cpc.py patch ID [FILE] [--check] [--no-open]       (@replace/@after/@before/@delete/@append/@meta -> vN+1)
 
@@ -31,6 +32,7 @@ sys.path.insert(0, str(HERE))
 
 from cpc.answers import decision_rows, header as answers_header, is_delta, merge as merge_answers  # noqa: E402
 from cpc.dashboard import write_dashboard  # noqa: E402
+from cpc.icons import RENDER_VERSION as ICON_RENDER_VERSION, make_icon  # noqa: E402
 from cpc.parser import parse, slug  # noqa: E402
 from cpc.patch import PatchError, apply as apply_patch, diff_sections  # noqa: E402
 from cpc.render import render_page  # noqa: E402
@@ -78,6 +80,21 @@ def save_index(root, idx):
     d = store(root)
     d.mkdir(parents=True, exist_ok=True)
     (d / "index.json").write_text(json.dumps(idx, ensure_ascii=False, indent=1), encoding="utf-8")
+
+
+def ensure_icon(root, pid, plan):
+    """Create .2cpc/<id>/icon.png once. The motif is frozen (state.json "icon"); the picture is redrawn only when
+    the renderer changes (state.json "iconv" < RENDER_VERSION)."""
+    pdir = store(root) / pid
+    st = load_state(root, pid)
+    if (pdir / "icon.png").is_file() and st.get("icon") and st.get("iconv") == ICON_RENDER_VERSION:
+        return st["icon"]
+    title, intro = plan.meta.get("title", pid), plan.meta.get("intro", "")
+    pdir.mkdir(parents=True, exist_ok=True)
+    st["icon"] = make_icon(pdir / "icon.png", pid, title, intro, motif=st.get("icon"))
+    st["iconv"] = ICON_RENDER_VERSION
+    save_state(root, pid, st)
+    return st["icon"]
 
 
 def load_state(root, pid):
@@ -207,6 +224,7 @@ def build_version(root, pid, v, entry, text=None):
             prev_q = {q["id"]: pq[q["id"]] for q in plan.questions if q["id"] in pq and
                       any(q.get(k) != pq[q["id"]].get(k) for k in Q_SHAPE)}
         prev_key = storage_key(root, pid, v - 1)
+    ensure_icon(root, pid, plan)
     done = load_state(root, pid).get("todo", {})
     for q in plan.questions:
         if q["qt"] == "todo":
@@ -221,6 +239,7 @@ def build_version(root, pid, v, entry, text=None):
         "versions": versions,
         "gone": [k for k in versions if k != v and not (pdir / f"v{k}" / "index.html").is_file()],
         "status": entry.get("status"),
+        "icon": (pdir / "icon.png").is_file(),
         "editor": plan.meta.get("editor") or load_config().get("editor"),
         "changes": changes, "prev_q": prev_q,
         "decisions": decisions_for(pdir, plan, v, plan.meta.get("lang", "")),
@@ -429,7 +448,7 @@ def registry_roots():
 
 def refresh_dashboard(root):
     try:
-        write_dashboard(root, load_index(root), load_state, storage_key)
+        write_dashboard(root, load_index(root), load_state, storage_key, (HERE / "cpc.py").as_posix())
     except OSError as e:  # pragma: no cover
         print(f"WARN dashboard not written: {e}")
 
@@ -449,7 +468,8 @@ def skill_warning():
 
 def plan_lines(root, pid, e, prefix=""):
     st = e.get("status") or "active"
-    return f"{prefix}{pid} v{e['v']} {e.get('updated', '')[:10]} [{st}] {e['title']}"
+    motif = load_state(root, pid).get("icon", "")
+    return f"{prefix}{pid} v{e['v']} {e.get('updated', '')[:10]} [{st}]{f' <{motif}>' if motif else ''} {e['title']}"
 
 
 def cmd_list(args):
@@ -553,6 +573,35 @@ def cmd_status(args):
         build_version(root, args.id, e["v"], e)
     refresh_dashboard(root)
     print(f"OK {args.id} [{st}]")
+
+
+def cmd_apply(args):
+    """Apply the operations copied from the dashboard: "status <id> <value> ; …" (all validated first)."""
+    root = project_root(args.root)
+    idx = load_index(root)
+    ops = []
+    for raw in [o.strip() for o in args.ops.split(";") if o.strip()]:
+        parts = raw.split()
+        if len(parts) != 3 or parts[0] != "status":
+            die(f"bad operation '{raw}' (status <id> <value>) · nothing applied")
+        if parts[1] not in idx["plans"]:
+            die(f"unknown plan '{parts[1]}' · nothing applied")
+        st = norm_status(parts[2])
+        if not st:
+            die(f"bad status '{parts[2]}' · nothing applied")
+        ops.append((parts[1], st))
+    if not ops:
+        die("no operation")
+    for pid, st in ops:
+        e = idx["plans"][pid]
+        e["status"] = st
+    save_index(root, idx)
+    for pid, st in ops:
+        e = idx["plans"][pid]
+        if (store(root) / pid / f"v{e['v']}" / "plan.txt").is_file():
+            build_version(root, pid, e["v"], e)
+        print(f"OK {pid} [{st}]")
+    refresh_dashboard(root)
 
 
 def cmd_gc(args):
@@ -702,6 +751,9 @@ def main(argv=None):
     p.add_argument("keys", nargs="*")
     p.add_argument("--undo", action="store_true")
     p.set_defaults(fn=cmd_todo)
+    p = sub.add_parser("apply", help='apply dashboard operations: "status <id> <value> ; ..."')
+    p.add_argument("ops")
+    p.set_defaults(fn=cmd_apply)
     p = sub.add_parser("status", help="set a plan status: draft|active|done|archived")
     p.add_argument("id")
     p.add_argument("value")
