@@ -76,6 +76,11 @@ def storage_key(root, pid, v):
     return f"2cpc:{slug(root.name, 24)}-{h}:{pid}:v{v}"
 
 
+def normalize_eol(text):
+    """CRLF, CR, CRCRLF (CRLF re-written in text mode on Windows) -> LF."""
+    return re.sub(r"\r+\n?", "\n", text)
+
+
 def read_input(args):
     if args.file:
         data = Path(args.file).read_bytes()
@@ -85,10 +90,10 @@ def read_input(args):
         data = sys.stdin.buffer.read()
     for enc in ("utf-8-sig", "cp1252"):
         try:
-            return data.decode(enc)
+            return normalize_eol(data.decode(enc))
         except UnicodeDecodeError:
             continue
-    return data.decode("utf-8", errors="replace")
+    return normalize_eol(data.decode("utf-8", errors="replace"))
 
 
 def open_file(path):
@@ -112,15 +117,15 @@ def build_version(root, pid, v, entry, text=None):
     vdir.mkdir(parents=True, exist_ok=True)
     src = vdir / "plan.txt"
     if text is not None:
-        src.write_text(text, encoding="utf-8")
-    plan = parse(src.read_text(encoding="utf-8"))
+        src.write_text(normalize_eol(text), encoding="utf-8", newline="\n")
+    plan = parse(src.read_bytes().decode("utf-8-sig"))
     vinfo = entry["versions"][str(v)]
     new_ids = set()
     prev_key = None
     if v > 1:
         psrc = pdir / f"v{v - 1}" / "plan.txt"
         if psrc.is_file():
-            prev_ids = {q["id"] for q in parse(psrc.read_text(encoding="utf-8")).questions}
+            prev_ids = {q["id"] for q in parse(psrc.read_bytes().decode("utf-8-sig")).questions}
             new_ids = {q["id"] for q in plan.questions} - prev_ids
         prev_key = storage_key(root, pid, v - 1)
     info = {

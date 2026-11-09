@@ -58,6 +58,13 @@ class ParserTest(unittest.TestCase):
         self.assertIn("cols", types)
         self.assertEqual(p.warnings, [])
 
+    def test_table_rows_any_line_endings(self):
+        # \r\r\n = CRLF text re-written in text mode on Windows
+        for eol in ("\n", "\r\n", "\r", "\r\r\n"):
+            p = parse(eol.join(["!table | A | B", "| a | b", "| c | d", "after"]))
+            self.assertEqual(p.blocks[0]["rows"], [["a", "b"], ["c", "d"]], repr(eol))
+            self.assertEqual(p.blocks[1], {"t": "p", "text": "after"})
+
     def test_questions(self):
         p = parse(SAMPLE)
         q = {x["id"]: x for x in p.questions}

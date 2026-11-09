@@ -67,7 +67,7 @@ class Plan:
 def parse(text):
     plan = Plan()
     text = text.replace("\\;", E_SEMI).replace("\\|", E_PIPE)
-    lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    lines = re.sub(r"\r+\n?", "\n", text).split("\n")
     i, n = 0, len(lines)
 
     # header keys (only before any content)
