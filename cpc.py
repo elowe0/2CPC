@@ -151,8 +151,10 @@ def summary(plan):
     c = Counter(q["qt"] for q in plan.questions)
     types = ", ".join(f"{k} {v}" for k, v in c.most_common())
     ids = " ".join(q["id"] for q in plan.questions)
-    return (f"{secs} sections · {len(plan.questions)} questions" + (f" ({types})" if types else ""),
-            f"ids: {ids}" if ids else "")
+    line2 = f"ids: {ids}" if ids else ""
+    if plan.next is not None:
+        line2 += (" · " if line2 else "") + "next: " + " ".join(plan.next["opts"])
+    return (f"{secs} sections · {len(plan.questions)} questions" + (f" ({types})" if types else ""), line2)
 
 
 def asset_warnings(blocks, root):

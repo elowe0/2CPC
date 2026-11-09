@@ -281,3 +281,20 @@ dialog::backdrop{background:rgba(0,0,0,.35)}
 .draw .gt{fill:var(--muted);font-size:.8em;stroke:none}
 .draw .lb{fill:var(--text);stroke:var(--surface);paint-order:stroke;stroke-linejoin:round}
 .draw .tx.s1,.draw .tx.s2,.draw .tx.s3,.draw .tx.s4,.draw .tx.s5,.draw .tx.s7,.draw .tx.s8,.draw .tx.gr{fill:var(--c)}
+
+/* "What next?" panel */
+.next{margin:3rem 0 0;padding:16px 18px;background:var(--surface);border:1px solid var(--line);border-top:3px solid var(--new);border-radius:var(--radius);box-shadow:var(--shadow)}
+.next h2{margin:0 0 2px;font-size:1.2rem}
+.next>.hint{margin:0 0 10px}
+.next-list li input{accent-color:var(--accent);width:17px;height:17px;margin:0;flex:0 0 auto;cursor:pointer}
+.next-list li .lbl{cursor:pointer}
+.next-list li:has(input:checked){border-color:var(--accent);background:var(--accent-soft)}
+.next-list li.off .lbl{color:var(--text-2)}
+.next-list li.custom .lt{font-style:italic}
+.next-list .del:hover{border-color:var(--bad)!important;color:var(--bad)}
+.next-add{display:flex;gap:8px;margin-top:8px}
+.next-add input{flex:1;min-width:0}
+.next-none{margin:8px 0 0}
+.next-pause{margin:10px 0 8px}
+.next-note{width:100%}
+@media print{.next-add,.next-list li.off{display:none!important}}

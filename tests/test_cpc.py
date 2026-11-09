@@ -248,6 +248,31 @@ class CliTest(unittest.TestCase):
         out = self.run_cli(["new", "T", "--no-open"], "!img nope.png\n")
         self.assertIn("WARN missing asset: nope.png", out)
 
+    def page_plan(self, pid, v=1):
+        html = (self.dir / ".2cpc" / pid / f"v{v}" / "index.html").read_text(encoding="utf-8")
+        return html, json.loads(html.split("window.PLAN=")[1].split(";window.I18N=")[0])
+
+    def test_next_custom(self):
+        out = self.run_cli(["new", "--no-open"],
+                           "title: Nx\n# S\n!next impl=Implémenter :: lot 1* ; tests=Écrire les tests ; doc=Doc\n")
+        self.assertIn("next: impl tests doc", out)
+        html, plan = self.page_plan("nx")
+        self.assertEqual(plan["next"]["opts"], ["impl", "tests", "doc"])
+        self.assertEqual(plan["next"]["rec"], ["impl"])
+        self.assertIn('class="next"', html)
+        self.assertIn('data-k="tests"', html)
+        self.assertNotIn("{{NEXT}}", html)
+
+    def test_next_default_and_off(self):
+        self.run_cli(["new", "--no-open"], "title: Def\nlang: en\n# S\ntext\n")
+        _, plan = self.page_plan("def")
+        self.assertEqual(plan["next"]["opts"], ["revise", "synth", "tech", "exec"])
+        self.assertIn("Start execution", plan["next"]["labels"]["exec"])
+        self.run_cli(["new", "--no-open"], "title: Off\nnext: off\n# S\n!next a ; b\n")
+        html, plan = self.page_plan("off")
+        self.assertIsNone(plan["next"])
+        self.assertNotIn('class="next"', html)
+
     def test_new_without_id_does_not_overwrite(self):
         self.run_cli(["new", "--no-open"], SAMPLE)
         out = self.run_cli(["new", "--no-open"], SAMPLE)

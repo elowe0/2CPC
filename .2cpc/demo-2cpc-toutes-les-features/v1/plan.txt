@@ -116,3 +116,5 @@ Maison | API Node sur mesure | + contrôle total ; - coût et délai
 ?number budget | Budget max (k€) | 10-100 | 45
 ?scale confidence | Confiance dans le planning | 1-5 | 3
 ?yesno go! | Lancer le projet ? | oui
+
+!next revise=Intégrer les réponses dans le plan :: v2 du plan* ; synth=Synthétiser les décisions ; tech=Préparer l'implémentation technique :: architecture, fichiers, risques ; proto=Prototyper l'écran principal ; exec=Commencer l'exécution

@@ -53,6 +53,7 @@
     $$(".badge.reused").forEach(function (b) { b.textContent = t("reused", { v: pv }); });
     $("#reusedBanner div").textContent = t("reusedBanner", { v: pv });
     if (S.ts) save(); else $("#saveState").textContent = "";
+    $$(".next-list li.custom").forEach(nxTitles);
     $$("figure.mermaid-wrap figcaption").forEach(function (e) { e.textContent = t("mermaidOffline"); });
     refresh();
   }
@@ -127,6 +128,77 @@
       if (q.def !== undefined && S.a[q.id] === undefined) { S.a[q.id] = q.def; anyDef = true; }
     });
   }
+
+  // ---------- "What next?" panel ----------
+  // S.n = { items: [{k: key} | {c: custom text}, each with on: bool], pause: bool, note: str }
+  var NX = P.next, nxBox = $("#next");
+  function nxInit() {
+    var opts = NX.opts, st = S.n && Array.isArray(S.n.items) ? S.n : null, items = [], seen = {};
+    if (st) st.items.forEach(function (it) {
+      if (it.c) items.push({ c: String(it.c), on: !!it.on });
+      else if (opts.indexOf(it.k) >= 0 && !seen[it.k]) { seen[it.k] = 1; items.push({ k: it.k, on: !!it.on }); }
+    });
+    opts.forEach(function (k) { if (!seen[k]) items.push({ k: k, on: !st && (NX.rec || []).indexOf(k) >= 0 }); });
+    S.n = { items: items, pause: !!(st && st.pause), note: (st && st.note) || "" };
+  }
+  function nxTitles(li) {
+    li.querySelector(".up").title = t("up"); li.querySelector(".down").title = t("down");
+    li.querySelector(".del").title = t("nextDel");
+  }
+  function nxCustomLi(txt) {
+    var li = document.createElement("li");
+    li.draggable = true; li.className = "custom"; li.dataset.c = txt;
+    li.innerHTML = '<span class="grip" aria-hidden="true">⋮⋮</span><input type="checkbox"><span class="rk"></span>' +
+      '<span class="lbl"><span class="ol"><span class="lt"></span></span></span>' +
+      '<button type="button" class="up">↑</button><button type="button" class="down">↓</button>' +
+      '<button type="button" class="del">×</button>';
+    $(".lt", li).textContent = txt;
+    $("input", li).setAttribute("aria-label", txt);
+    nxTitles(li);
+    return li;
+  }
+  function nxWrite() {
+    var ol = $(".next-list", nxBox), lis = {};
+    $$("li[data-k]", ol).forEach(function (li) { lis[li.dataset.k] = li; });
+    $$("li.custom", ol).forEach(function (li) { li.remove(); });
+    S.n.items.forEach(function (it) {
+      var li = it.c ? nxCustomLi(it.c) : lis[it.k];
+      if (!li) return;
+      $("input", li).checked = it.on; ol.appendChild(li);
+    });
+    $(".next-pause input", nxBox).checked = S.n.pause;
+    $(".next-note", nxBox).value = S.n.note;
+    nxNums();
+  }
+  function nxRead() {
+    S.n.items = $$(".next-list li", nxBox).map(function (li) {
+      var on = $("input", li).checked;
+      return li.dataset.c !== undefined ? { c: li.dataset.c, on: on } : { k: li.dataset.k, on: on };
+    });
+    S.n.pause = $(".next-pause input", nxBox).checked;
+    S.n.note = $(".next-note", nxBox).value;
+  }
+  function nxNums() {
+    var n = 0;
+    $$(".next-list li", nxBox).forEach(function (li) {
+      var on = $("input", li).checked;
+      li.classList.toggle("off", !on);
+      $(".rk", li).textContent = on ? ++n + "." : "";
+    });
+    $(".next-none", nxBox).hidden = n > 0;
+  }
+  function nxChanged() { nxRead(); nxNums(); save(); }
+  function nxAdd() {
+    var inp = $(".next-new", nxBox), v = inp.value.trim();
+    if (!v) { inp.focus(); return; }
+    var li = nxCustomLi(v); $("input", li).checked = true;
+    $(".next-list", nxBox).appendChild(li); inp.value = ""; nxChanged(); inp.focus();
+  }
+  if (NX && nxBox) {
+    nxInit(); nxWrite();
+    $(".next-add button", nxBox).addEventListener("click", nxAdd);
+    $(".next-new", nxBox).addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); nxAdd(); } });
+  } else { NX = null; }
 
   // ---------- DOM <-> state ----------
   function readQ(el) {
@@ -234,6 +306,7 @@
   }
 
   function onChange(e) {
+    if (NX && e.target.closest("#next")) { if (!e.target.classList.contains("next-new")) nxChanged(); return; }
     var qe = e.target.closest(".q");
     if (qe) {
       var id = qe.dataset.q;
@@ -265,6 +338,16 @@
   // rank: buttons + drag & drop
   function rankChanged(el) { rankNums(el); S.a[el.dataset.q] = readQ(el); delete S.r[el.dataset.q]; save(); refresh(); }
   main.addEventListener("click", function (e) {
+    var nb = e.target.closest(".next-list button");
+    if (nb) {
+      var nli = nb.closest("li"), nol = nli.parentNode;
+      if (nb.classList.contains("del")) { nli.remove(); nxChanged(); return; }
+      if (nb.classList.contains("up") && nli.previousElementSibling) nol.insertBefore(nli, nli.previousElementSibling);
+      if (nb.classList.contains("down") && nli.nextElementSibling) nol.insertBefore(nli.nextElementSibling, nli);
+      nxChanged(); nb.focus(); return;
+    }
+    var nl = e.target.closest(".next-list .lbl");
+    if (nl && !e.target.closest("a")) { var cb = $("input", nl.parentNode); cb.checked = !cb.checked; nxChanged(); return; }
     var b = e.target.closest(".rank button");
     if (b) {
       var li = b.closest("li"), ol = li.parentNode;
@@ -305,7 +388,7 @@
     e.preventDefault();
     var ol = li.parentNode, items = $$("li", ol);
     if (items.indexOf(dragged) < items.indexOf(li)) ol.insertBefore(dragged, li.nextSibling); else ol.insertBefore(dragged, li);
-    rankChanged(li.closest(".q"));
+    if (ol.classList.contains("next-list")) nxChanged(); else rankChanged(li.closest(".q"));
   });
   main.addEventListener("dragend", function () {
     if (dragged) dragged.classList.remove("drag");
@@ -348,6 +431,21 @@
     }
     return [base + "=" + val];
   }
+  // next=k1>k2>"custom" (ticked steps, in order) · next.pause=oui · next.note="…"
+  function nextLines(ctx) {
+    var out = [], on = S.n.items.filter(function (it) { return it.on; });
+    if (on.length) {
+      out.push("next=" + on.map(function (it) {
+        if (it.c) return JSON.stringify(it.c);
+        var L = (NX.labels && NX.labels[it.k]) || it.k;
+        return ctx && L !== it.k ? it.k + "(" + short(L, 30) + ")" : it.k;
+      }).join(">"));
+      if (S.n.pause) out.push("next.pause=" + t("yes"));
+    }
+    var note = String(S.n.note || "").trim();
+    if (note) out.push("next.note=" + JSON.stringify(note));
+    return out;
+  }
   function build(ctx) {
     var L = [];
     if (ctx) {
@@ -367,6 +465,7 @@
       var c = (S.c[s.id] || "").trim();
       if (c) L.push("#" + short(s.text, 30) + "=" + JSON.stringify(c));
     });
+    if (NX) L.push.apply(L, nextLines(ctx));
     return L.join("\n");
   }
   function toast(msg) {
@@ -422,7 +521,7 @@
       try {
         var o = JSON.parse(rd.result), st = o.state || o;
         if (!st || typeof st.a !== "object") throw 0;
-        S = { a: st.a || {}, c: st.c || {}, o: st.o || {}, r: {} };
+        S = { a: st.a || {}, c: st.c || {}, o: st.o || {}, r: {}, n: st.n };
         save(); location.reload();
       } catch (x) { alert(t("importFail")); }
     };

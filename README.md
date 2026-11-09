@@ -24,6 +24,7 @@ python cpc.py rebuild [ID]           # régénérer les pages après une mise à
 ## Format
 Voir [docs/DSL.md](docs/DSL.md) : Markdown, plus des directives `!bloc` et des questions `?type id | libellé | options`.
 - `!draw … !end` : croquis vectoriel en quelques lignes (`box`, `circle`, `arrow`, `dot`…), rendu en SVG dans la page, sans image externe.
+- `!next …` : panneau « Et ensuite ? » en bas de page. L'utilisateur coche et ordonne les actions que l'agent doit enchaîner (intégrer les réponses, implémenter…), ajoute ses propres étapes et une consigne. Sans `!next`, des options par défaut sont proposées ; en-tête `next: off` pour le retirer.
 - Les questions `?choice` / `?multi` / `?pick` ont toujours un champ « Autre… » ; la réponse libre revient entre guillemets (`id="…"`). En-tête `other: off` pour le retirer.
 
 ## Page

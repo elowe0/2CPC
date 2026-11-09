@@ -53,6 +53,14 @@ STRINGS = {
         "otherPh": "Autre : précisez…",
         "clear": "effacer",
         "done": "Plan prêt à être renvoyé",
+        "nextTitle": "Et ensuite ?",
+        "nextHint": "Cochez ce que l'agent doit faire après avoir lu vos réponses, et ordonnez les étapes (glisser ou ↑ ↓).",
+        "nextAdd": "Ajouter",
+        "nextAddPh": "Autre étape…",
+        "nextDel": "Retirer",
+        "nextPause": "Me demander validation entre chaque étape",
+        "nextNotePh": "Consigne pour l'agent (contraintes, périmètre, points d'attention…)",
+        "nextNone": "Aucune étape cochée : l'agent se contentera de lire vos réponses.",
     },
     "en": {
         "toc": "Contents",
@@ -106,5 +114,26 @@ STRINGS = {
         "otherPh": "Other: specify…",
         "clear": "clear",
         "done": "Plan ready to send back",
+        "nextTitle": "What next?",
+        "nextHint": "Tick what the agent should do after reading your answers, and order the steps (drag or ↑ ↓).",
+        "nextAdd": "Add",
+        "nextAddPh": "Other step…",
+        "nextDel": "Remove",
+        "nextPause": "Ask me to validate between each step",
+        "nextNotePh": "Instruction for the agent (constraints, scope, things to watch…)",
+        "nextNone": "No step ticked: the agent will only read your answers.",
     },
+}
+
+
+# Default "What next?" options (!next syntax), used when a plan has no !next directive.
+NEXT_DEFAULT = {
+    "fr": ("revise=Intégrer les réponses dans le plan :: nouvelle version du plan 2CPC* ; "
+           "synth=Synthétiser le plan :: récapitulatif des décisions et points ouverts ; "
+           "tech=Préparer l'implémentation technique :: fichiers, étapes, risques, tests ; "
+           "exec=Commencer l'exécution"),
+    "en": ("revise=Integrate the answers into the plan :: new 2CPC plan version* ; "
+           "synth=Summarize the plan :: decisions taken and open points ; "
+           "tech=Prepare the technical implementation :: files, steps, risks, tests ; "
+           "exec=Start execution"),
 }

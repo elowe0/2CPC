@@ -2,7 +2,7 @@
 Markdown + one-line directives. `!` = content, `?` = question. `|` separates fields, `;` separates items.
 Literal `|` or `;` inside a field: write `\|` / `\;`. Inline markdown (**b** *i* `code` [l](url)) works in all labels, items, details, cells.
 
-Header (top, optional): `title:` · `lang: fr|en` · `intro:` 1–2 sentences (used by "Answer + Context") · `comments: off` · `other: off`
+Header (top, optional): `title:` · `lang: fr|en` · `intro:` 1–2 sentences (used by "Answer + Context") · `comments: off` · `other: off` · `next: off`
 
 Text: `#`/`##`/`###` headings · paragraphs · `- `/`1. ` lists · `> quote` · `> note|tip|warn|danger: text` · `---`
 
@@ -65,9 +65,20 @@ Items of choice/multi/rank/approve: `KEY=Label :: detail` — KEY (`[A-Za-z0-9_.
 answer key; `:: detail` (optional) is a secondary line. Use keys whenever labels are long or contain , ( ) >.
 Each `#`/`##` section gets a comment box (answer key `#Section`).
 
+### `!next` — "What next?" panel (bottom of page)
+```
+!next KEY=Label :: detail* ; KEY=Label ; …     (same item syntax as ?multi; * = pre-ticked)
+```
+The user ticks and **orders** the follow-up actions you should run after reading the answers, can add their own
+steps, ask for a pause between steps and leave an instruction. One per plan, anywhere (rendered at the bottom).
+Without `!next`, defaults are shown: `revise` (integrate answers → new version, pre-ticked) · `synth` · `tech` · `exec`.
+Write 3–6 options **adapted to the plan's stage** (e.g. early: `revise`, `explore`, `proto`; settled: `tech`,
+`exec`, `tests`, `pr`), pre-tick the one you recommend.
+
 Answer pasted back: `2CPC <id> vN` then one `key=value` line per answer (unanswered omitted):
 `choice`→key · `multi`→`k1,k2` · a **quoted** value is the user's own "Other" answer (`psp="Mollie"`, `f=a,"PDF export"`) · `rank`→`k1>k2` · `scale`→`4/5` · `matrix`→`Row:Col, …` · text→JSON string ·
 `approve`→ one line per item: `id.KEY=✓` / `id.KEY=✗ "note"` / `id.KEY=?` / `id.KEY="note"`.
+`!next` → `next=k1>k2>"user step"` (ticked, in order) · `next.pause=oui` · `next.note="…"`.
 "Answer + Context" adds a header (title, intro, absolute paths) and short labels: `id(Label)=…`, `k(Label)`.
 
 ## Example

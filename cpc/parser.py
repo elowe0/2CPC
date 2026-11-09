@@ -7,7 +7,7 @@ import re
 
 from . import draw
 
-HEADER_KEYS = ("title", "lang", "intro", "comments", "other")
+HEADER_KEYS = ("title", "lang", "intro", "comments", "other", "next")
 CALLOUTS = ("note", "tip", "warn", "danger")
 QTYPES = ("choice", "multi", "text", "line", "number", "date", "scale",
           "yesno", "rank", "approve", "matrix", "pick")
@@ -18,7 +18,7 @@ _ID = re.compile(r"^[A-Za-z0-9_.-]+$")
 _KEY = re.compile(r"^([A-Za-z0-9_.-]{1,40})=(?!=)(.*)$")
 _NUM = r"-?\d+(?:\.\d+)?"
 OPT_TYPES = ("choice", "multi", "rank", "approve")
-REC_TYPES = ("choice", "multi")
+REC_TYPES = ("choice", "multi", "next")
 # max number of |-fields per question type (id | label | ...)
 QFIELDS = {"choice": 3, "multi": 3, "rank": 3, "approve": 3, "text": 3, "line": 3,
            "date": 3, "yesno": 3, "number": 4, "scale": 4, "matrix": 4, "pick": 2}
@@ -62,6 +62,7 @@ class Plan:
         self.blocks = []
         self.questions = []   # flat list of question blocks, in order
         self.warnings = []
+        self.next = None      # "what next?" options (dict like a ?multi), see !next
 
 
 def parse(text):
@@ -304,6 +305,12 @@ def parse(text):
                     b = int(mm.group(3) or a)
                     rows.append({"name": k.strip(), "a": min(a, b), "b": max(a, b), "unit": mm.group(1).strip()})
                 target.append({"t": "gantt", "rows": rows})
+            elif name == "next":
+                if plan.next is not None:
+                    warn("duplicate !next (last one wins)")
+                nb = {"qt": "next", "id": "next"}
+                opts_parse(nb, arg, warn)
+                plan.next = nb
             elif name == "link":
                 target.append({"t": "link", "label": p[0], "href": p[1] if len(p) > 1 else p[0]})
             elif name == "todo":
@@ -410,6 +417,7 @@ def parse(text):
     plan.blocks = _unesc(root)
     plan.questions = [q for q in _iter_q(plan.blocks)]
     plan.meta = _unesc(plan.meta)
+    plan.next = _unesc(plan.next)
     return plan
 
 

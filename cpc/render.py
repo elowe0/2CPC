@@ -6,9 +6,9 @@ from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 
 from . import charts, draw
-from .i18n import STRINGS
+from .i18n import NEXT_DEFAULT, STRINGS
 from .markdown import esc, inline
-from .parser import first_paragraph, slug
+from .parser import first_paragraph, opts_parse, slug
 
 TPL = Path(__file__).parent / "template"
 SEL = ' aria-selected="true"'
@@ -322,6 +322,39 @@ def body_html(plan, ctx, comments=True):
     return "".join(out)
 
 
+def next_opts(plan, lang):
+    """'What next?' options: the plan's !next, else defaults; None if `next: off`."""
+    if plan.meta.get("next", "on").lower() in ("off", "no", "0", "false"):
+        return None
+    if plan.next is not None:
+        return plan.next
+    nb = {"qt": "next", "id": "next"}
+    opts_parse(nb, NEXT_DEFAULT.get(lang or "fr", NEXT_DEFAULT["fr"]), lambda m: None)
+    return nb
+
+
+def next_li(b, k):
+    return (f'<li draggable="true" data-k="{esc(k)}"><span class="grip" aria-hidden="true">⋮⋮</span>'
+            f'<input type="checkbox" aria-label="{esc(b["labels"].get(k, k))}"><span class="rk"></span>'
+            f'<span class="lbl">{opt_label(dict(b, keyed=False), k)}</span>'
+            f'<button type="button" class="up" data-i18n-title="up">↑</button>'
+            f'<button type="button" class="down" data-i18n-title="down">↓</button></li>')
+
+
+def next_panel(b):
+    if not b:
+        return ""
+    items = "".join(next_li(b, k) for k in b["opts"])
+    return (f'<section class="next" id="next" aria-labelledby="next-t">'
+            f'<h2 id="next-t" data-i18n="nextTitle"></h2><p class="hint" data-i18n="nextHint"></p>'
+            f'<ol class="rank next-list">{items}</ol>'
+            f'<div class="next-add"><input type="text" class="next-new" data-i18n-ph="nextAddPh">'
+            f'<button type="button" class="btn" data-i18n="nextAdd"></button></div>'
+            f'<p class="hint next-none" data-i18n="nextNone" hidden></p>'
+            f'<label class="opt next-pause"><input type="checkbox"><span data-i18n="nextPause"></span></label>'
+            f'<textarea class="next-note" rows="2" data-i18n-ph="nextNotePh"></textarea></section>')
+
+
 def q_meta(b):
     keep = ("id", "qt", "label", "req", "opts", "labels", "keyed", "rows", "cols", "items", "min", "max", "def", "other")
     return {k: b[k] for k in keep if k in b}
@@ -334,6 +367,7 @@ def render_page(plan, info, root, vdir, new_ids):
     body = body_html(plan, ctx, comments)
     lang = plan.meta.get("lang", "").lower()
     lang = lang if lang in STRINGS else ""
+    nxt = next_opts(plan, lang)
     toc = "".join(f'<li class="l{lvl}"><a href="#{esc(hid)}">{inline(txt)}</a></li>' for lvl, txt, hid in ctx.toc)
     meta = {
         "id": info["id"], "v": info["v"], "title": info["title"],
@@ -343,6 +377,7 @@ def render_page(plan, info, root, vdir, new_ids):
         "versions": info["versions"],
         "questions": [q_meta(q) for q in plan.questions],
         "sections": [{"id": s["id"], "text": s["text"]} for s in ctx.sections] if comments else [],
+        "next": {k: nxt[k] for k in ("opts", "labels", "keyed", "rec") if k in nxt} if nxt else None,
     }
     js_json = lambda o: json.dumps(o, ensure_ascii=False).replace("</", "<\\/")
     versions = "".join(
@@ -355,7 +390,8 @@ def render_page(plan, info, root, vdir, new_ids):
         "{{CSS}}": (TPL / "style.css").read_text(encoding="utf-8"),
         "{{JS}}": (TPL / "app.js").read_text(encoding="utf-8"),
         "{{BODY}}": body,
-        "{{TOC}}": toc,
+        "{{TOC}}": toc + ('<li class="l1"><a href="#next" data-i18n="nextTitle"></a></li>' if nxt else ""),
+        "{{NEXT}}": next_panel(nxt),
         "{{VERSIONS}}": versions,
         "{{META_LINE}}": esc(f"v{info['v']} · {Path(info['project']).name} · {info['date']}"),
         "{{PLAN}}": js_json(meta),
